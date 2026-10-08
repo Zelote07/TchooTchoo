@@ -1,0 +1,104 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SNCF - Recherche de Trajet</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+    
+    <script src="https://cdn.jsdelivr.net/npm/vega@5"></script>
+    <script src="https://cdn.jsdelivr.net/npm/vega-lite@5"></script>
+    <script src="https://cdn.jsdelivr.net/npm/vega-embed@6"></script>
+</head>
+<body>
+    <header class="sncf-header">
+        <div class="header-content">
+            <div class="logo-container">
+                <div class="logo-dots">
+                    <div class="dot dot-blue"></div>
+                    <div class="dot dot-white"></div>
+                </div>
+                <div class="logo-text">sncf<span>connect</span></div>
+            </div>
+
+        </div>
+    </header>
+
+    <main class="container">
+        <div class="hero-section">
+            <h1 class="hero-title">Trains, bus, transports en commun : trouvez facilement votre trajet</h1>
+            
+            <div class="search-panel">
+
+
+                <form id="search-form" autocomplete="off">
+                    <div class="search-bar-container">
+                        <div class="input-group autocomplete-container">
+                            <input type="text" id="depart" placeholder="Gare de départ (ex: Paris)" required autocomplete="off">
+                            <input type="hidden" id="id_depart">
+                            <ul class="autocomplete-list" id="depart-list"></ul>
+                        </div>
+                        <div class="divider"></div>
+                        <div class="input-group">
+                            <input type="number" id="max_duration" min="1" max="1440" placeholder="Durée max (min)" value="400" required>
+                        </div>
+                        <button type="submit" id="submit-btn">Rechercher</button>
+                    </div>
+                </form>
+
+
+            </div>
+        </div>
+
+        <div id="loader" class="hidden">
+            <div class="spinner"></div>
+            <p>Recherche des itinéraires...</p>
+        </div>
+
+        <div id="results" class="hidden">
+            <div class="results-header">
+                <h2 id="route-title"></h2>
+            </div>
+            
+            <div class="chart-panel">
+                <h3>Comparatif des temps de trajet</h3>
+                <div id="vis"></div>
+            </div>
+
+            <div class="journeys-grid" id="journeys-grid">
+                <!-- Ajouté dynamiquement -->
+            </div>
+        </div>
+
+        <div id="destination-view" class="hidden">
+            <button id="back-btn" class="btn" style="margin-bottom: 20px; background: #555; color: white; border: none; padding: 10px 15px; cursor: pointer; border-radius: 4px;">⬅ Retour aux résultats</button>
+            
+            <div class="dest-header" style="position: relative; border-radius: 8px; overflow: hidden; margin-bottom: 20px; background: #eee; min-height: 200px;">
+                <img id="dest-img" style="width: 100%; height: 300px; object-fit: cover; display: none;" src="" alt="Ville">
+                <div style="position: absolute; bottom: 0; left: 0; right: 0; background: linear-gradient(transparent, rgba(0,0,0,0.8)); padding: 20px; color: white;">
+                    <h1 id="dest-title" style="margin: 0; font-size: 2.5rem; text-shadow: 1px 1px 3px rgba(0,0,0,0.5);">Destination</h1>
+                </div>
+            </div>
+
+            <div style="display: flex; gap: 10px; margin-bottom: 20px; flex-wrap: wrap;" id="dest-badges">
+                <!-- Badges insérés ici -->
+            </div>
+
+            <div style="background: white; padding: 20px; border-radius: 8px; box-shadow: 0 2px 10px rgba(0,0,0,0.05); margin-bottom: 20px;">
+                <h3 style="margin-top: 0;">À propos de la destination</h3>
+                <p id="dest-summary" style="line-height: 1.6; color: #444;">Chargement de la description...</p>
+            </div>
+
+            <div style="background: white; padding: 20px; border-radius: 8px; box-shadow: 0 2px 10px rgba(0,0,0,0.05);">
+                <h3 style="margin-top: 0;">Horaires de trains vers cette destination</h3>
+                <div id="dest-schedules">
+                    <!-- Horaires insérés ici -->
+                </div>
+            </div>
+        </div>
+    </main>
+
+    <script src="{{ url_for('static', filename='app.js') }}"></script>
+</body>
+</html>
