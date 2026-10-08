@@ -1,0 +1,17 @@
+# Environnements virtuels et variables secrètes
+.env
+tchootchoo/
+
+# Fichiers compilés Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+
+# Flask
+instance/
+.webassets-cache
+
+# Systèmes d'exploitation
+.DS_Store
+Thumbs.db
