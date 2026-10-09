@@ -3,102 +3,256 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>SNCF - Recherche de Trajet</title>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+    <title>TchooTchoo - Tableau de Bord Éco-Explorateur</title>
+    <!-- Google Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
     
-    <script src="https://cdn.jsdelivr.net/npm/vega@5"></script>
-    <script src="https://cdn.jsdelivr.net/npm/vega-lite@5"></script>
-    <script src="https://cdn.jsdelivr.net/npm/vega-embed@6"></script>
+    <!-- Leaflet CSS -->
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="" />
+    
+    <!-- Custom CSS -->
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
 </head>
 <body>
-    <header class="sncf-header">
-        <div class="header-content">
-            <div class="logo-container">
-                <div class="logo-dots">
-                    <div class="dot dot-blue"></div>
-                    <div class="dot dot-white"></div>
+    <div class="dashboard-wrapper">
+        <!-- Top App Navigation Bar -->
+        <header class="app-header">
+            <div class="brand">
+                <div class="brand-badge">
+                    <span class="train-icon">🚆</span>
                 </div>
-                <div class="logo-text">sncf<span>connect</span></div>
+                <div class="brand-text">
+                    <h1>TchooTchoo<span>Connect</span></h1>
+                    <p class="tagline">L'explorateur ferroviaire & culturel bas-carbone</p>
+                </div>
             </div>
+            <div class="header-status">
+                <div class="status-indicator">
+                    <span class="status-dot"></span>
+                    <span class="status-text" id="status-label">Prêt à explorer</span>
+                </div>
+            </div>
+        </header>
 
-        </div>
-    </header>
-
-    <main class="container">
-        <div class="hero-section">
-            <h1 class="hero-title">Trains, bus, transports en commun : trouvez facilement votre trajet</h1>
+        <!-- Main Dashboard Content Grid -->
+        <main class="dashboard-grid">
             
-            <div class="search-panel">
-
-
-                <form id="search-form" autocomplete="off">
-                    <div class="search-bar-container">
-                        <div class="input-group autocomplete-container">
-                            <input type="text" id="depart" placeholder="Gare de départ (ex: Paris)" required autocomplete="off">
-                            <input type="hidden" id="id_depart">
-                            <ul class="autocomplete-list" id="depart-list"></ul>
+            <!-- ROW 1: TOP 3 CARDS -->
+            <section class="top-row">
+                
+                <!-- CARD 1: SEARCH & DURATION -->
+                <div class="dash-card card-search" id="card-search">
+                    <div class="card-header">
+                        <div class="card-title-group">
+                            <span class="card-icon">🎯</span>
+                            <div>
+                                <h2 class="card-title">Ville de départ & Durée</h2>
+                                <span class="card-subtitle">Trouvez votre prochaine escapade en train</span>
+                            </div>
                         </div>
-                        <div class="divider"></div>
-                        <div class="input-group">
-                            <input type="number" id="max_duration" min="1" max="1440" placeholder="Durée max (min)" value="400" required>
-                        </div>
-                        <button type="submit" id="submit-btn">Rechercher</button>
                     </div>
-                </form>
+                    <form id="search-form" class="search-form" autocomplete="off">
+                        <div class="form-inputs-row">
+                            <div class="form-group autocomplete-group">
+                                <label for="depart">Gare de départ</label>
+                                <div class="input-with-icon">
+                                    <span class="input-icon">📍</span>
+                                    <input type="text" id="depart" placeholder="Ex: Paris, Lyon, Bordeaux..." required autocomplete="off" value="Paris">
+                                    <input type="hidden" id="id_depart">
+                                </div>
+                                <ul class="autocomplete-list" id="depart-list"></ul>
+                            </div>
 
+                            <div class="form-group duration-group">
+                                <div class="duration-label-row">
+                                    <label for="max_duration">Durée max :</label>
+                                    <span class="duration-display" id="duration-display">3h00 (180 min)</span>
+                                </div>
+                                <div class="duration-slider-container">
+                                    <input type="range" id="max_duration" min="30" max="480" step="15" value="180">
+                                </div>
+                                <div class="duration-presets">
+                                    <button type="button" class="preset-btn" data-min="60">1h</button>
+                                    <button type="button" class="preset-btn" data-min="120">2h</button>
+                                    <button type="button" class="preset-btn active" data-min="180">3h</button>
+                                    <button type="button" class="preset-btn" data-min="240">4h</button>
+                                </div>
+                            </div>
 
-            </div>
-        </div>
-
-        <div id="loader" class="hidden">
-            <div class="spinner"></div>
-            <p>Recherche des itinéraires...</p>
-        </div>
-
-        <div id="results" class="hidden">
-            <div class="results-header">
-                <h2 id="route-title"></h2>
-            </div>
-            
-            <div class="chart-panel">
-                <h3>Comparatif des temps de trajet</h3>
-                <div id="vis"></div>
-            </div>
-
-            <div class="journeys-grid" id="journeys-grid">
-                <!-- Ajouté dynamiquement -->
-            </div>
-        </div>
-
-        <div id="destination-view" class="hidden">
-            <button id="back-btn" class="btn" style="margin-bottom: 20px; background: #555; color: white; border: none; padding: 10px 15px; cursor: pointer; border-radius: 4px;">⬅ Retour aux résultats</button>
-            
-            <div class="dest-header" style="position: relative; border-radius: 8px; overflow: hidden; margin-bottom: 20px; background: #eee; min-height: 200px;">
-                <img id="dest-img" style="width: 100%; height: 300px; object-fit: cover; display: none;" src="" alt="Ville">
-                <div style="position: absolute; bottom: 0; left: 0; right: 0; background: linear-gradient(transparent, rgba(0,0,0,0.8)); padding: 20px; color: white;">
-                    <h1 id="dest-title" style="margin: 0; font-size: 2.5rem; text-shadow: 1px 1px 3px rgba(0,0,0,0.5);">Destination</h1>
+                            <div class="form-submit-group">
+                                <button type="submit" id="submit-btn" class="btn-primary">
+                                    <span class="btn-spinner hidden" id="search-spinner"></span>
+                                    <span class="btn-text">Explorer 🚀</span>
+                                </button>
+                            </div>
+                        </div>
+                    </form>
                 </div>
-            </div>
 
-            <div style="display: flex; gap: 10px; margin-bottom: 20px; flex-wrap: wrap;" id="dest-badges">
-                <!-- Badges insérés ici -->
-            </div>
-
-            <div style="background: white; padding: 20px; border-radius: 8px; box-shadow: 0 2px 10px rgba(0,0,0,0.05); margin-bottom: 20px;">
-                <h3 style="margin-top: 0;">À propos de la destination</h3>
-                <p id="dest-summary" style="line-height: 1.6; color: #444;">Chargement de la description...</p>
-            </div>
-
-            <div style="background: white; padding: 20px; border-radius: 8px; box-shadow: 0 2px 10px rgba(0,0,0,0.05);">
-                <h3 style="margin-top: 0;">Horaires de trains vers cette destination</h3>
-                <div id="dest-schedules">
-                    <!-- Horaires insérés ici -->
+                <!-- CARD 2: ECOLOGY KPI ("Truc ecologie") -->
+                <div class="dash-card card-eco" id="card-eco">
+                    <div class="card-header">
+                        <div class="card-title-group">
+                            <span class="card-icon">🌱</span>
+                            <div>
+                                <h2 class="card-title">Bilan Écologique</h2>
+                                <span class="card-subtitle">Gain carbone de votre voyage</span>
+                            </div>
+                        </div>
+                        <span class="eco-badge-pill" id="eco-score-badge">Éco A+</span>
+                    </div>
+                    <div class="eco-body" id="eco-body">
+                        <div class="eco-metric-main">
+                            <span class="eco-percentage" id="eco-saved-pct">-92%</span>
+                            <span class="eco-metric-label">de CO₂ en moins vs voiture</span>
+                        </div>
+                        <div class="eco-stats-sub">
+                            <div class="eco-sub-item">
+                                <span class="eco-sub-value" id="eco-saved-kg">38.4 kg</span>
+                                <span class="eco-sub-label">CO₂ évités</span>
+                            </div>
+                            <div class="eco-sub-divider"></div>
+                            <div class="eco-sub-item">
+                                <span class="eco-sub-value" id="eco-trees">1.5 🌳</span>
+                                <span class="eco-sub-label">Arbres équivalents</span>
+                            </div>
+                            <div class="eco-sub-divider"></div>
+                            <div class="eco-sub-item">
+                                <span class="eco-sub-value" id="eco-train-co2">1.2 kg</span>
+                                <span class="eco-sub-label">Émission train</span>
+                            </div>
+                        </div>
+                    </div>
                 </div>
-            </div>
-        </div>
-    </main>
 
+                <!-- CARD 3: COMPARATIVE CO2 CHART ("JSP" -> Comparateur CO2) -->
+                <div class="dash-card card-carbon-chart" id="card-chart">
+                    <div class="card-header">
+                        <div class="card-title-group">
+                            <span class="card-icon">📊</span>
+                            <div>
+                                <h2 class="card-title">Comparatif Transports</h2>
+                                <span class="card-subtitle">Empreinte carbone par mode (kg CO₂)</span>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="chart-body" id="chart-body">
+                        <div class="co2-bars-container" id="co2-bars-list">
+                            <!-- Barres comparatives générées dynamiquement -->
+                        </div>
+                    </div>
+                </div>
+
+            </section>
+
+            <!-- ROW 2: BOTTOM 2 LARGE COLUMNS -->
+            <section class="bottom-row">
+
+                <!-- CARD 4 & 5 (LEFT): DESTINATION SELECTOR & POINTS OF INTEREST -->
+                <div class="dash-card card-destination-details" id="card-destination">
+                    
+                    <!-- Card 4 Sub-Header: "Ville a visiter" -->
+                    <div class="destination-header-block">
+                        <div class="destination-select-wrapper">
+                            <div class="select-label-row">
+                                <label for="destination-select" class="dest-label">
+                                    <span class="pin-icon">🏙️</span> Ville à visiter :
+                                </label>
+                                <div class="sort-toggles">
+                                    <button type="button" class="sort-btn active" id="sort-duration" title="Trier par durée de trajet">
+                                        ⏱️ Plus rapide
+                                    </button>
+                                    <button type="button" class="sort-btn" id="sort-culture" title="Trier par nombre de lieux culturels">
+                                        🏛️ Plus culturel
+                                    </button>
+                                </div>
+                            </div>
+                            <div class="custom-select-container">
+                                <select id="destination-select" class="destination-select">
+                                    <option value="">Sélectionnez une destination...</option>
+                                </select>
+                            </div>
+                        </div>
+
+                        <!-- Active City Overview Card -->
+                        <div class="active-city-banner" id="active-city-banner">
+                            <div class="banner-content">
+                                <div class="city-main-info">
+                                    <h3 class="city-name" id="city-title">Blois</h3>
+                                    <span class="city-station" id="station-title">Gare de Blois - Chambord</span>
+                                </div>
+                                <div class="city-badges-row">
+                                    <span class="badge badge-duration" id="badge-duration">⏱️ 1h26</span>
+                                    <span class="badge badge-culture" id="badge-culture">🏛️ 28 lieux culturels</span>
+                                    <span class="badge badge-cycle" id="badge-cycle">🚲 35 pistes cyclables</span>
+                                    <span class="badge badge-dist" id="badge-dist">📏 170 km</span>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Tab switcher between POIs and Schedules -->
+                        <div class="content-tabs">
+                            <button type="button" class="tab-btn active" id="tab-pois">
+                                <span>🏛️ Points d'intérêt culturels</span>
+                                <span class="tab-count" id="pois-count">0</span>
+                            </button>
+                            <button type="button" class="tab-btn" id="tab-schedules">
+                                <span>🕒 Horaires des trains</span>
+                                <span class="tab-count" id="schedules-count">0</span>
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- Card 5 Sub-Body: "Point d'intérêt" List -->
+                    <div class="tab-content-container">
+                        <!-- POIs Tab Panel -->
+                        <div class="tab-panel active" id="panel-pois">
+                            <div class="pois-scroll-list" id="pois-list">
+                                <!-- Dynamic POI items -->
+                            </div>
+                        </div>
+
+                        <!-- Schedules Tab Panel -->
+                        <div class="tab-panel hidden" id="panel-schedules">
+                            <div class="schedules-scroll-list" id="schedules-list">
+                                <!-- Dynamic train schedule items -->
+                            </div>
+                        </div>
+                    </div>
+
+                </div>
+
+                <!-- CARD 6 (RIGHT): INTERACTIVE LEAFLET MAP ("carte") -->
+                <div class="dash-card card-map" id="card-map">
+                    <div class="map-header-overlay">
+                        <div class="map-info-pill" id="map-info-pill">
+                            <span class="pulse-indicator"></span>
+                            <span id="map-route-text">Trajet : Paris ➔ Destination</span>
+                        </div>
+                        <div class="map-actions">
+                            <button type="button" class="map-action-btn" id="btn-fit-map" title="Recentrer le trajet et la ville">
+                                🎯 Recentrer
+                            </button>
+                            <button type="button" class="map-action-btn" id="btn-toggle-pois" title="Afficher/masquer les lieux culturels">
+                                🏛️ Filtrer POIs
+                            </button>
+                        </div>
+                    </div>
+                    <!-- The Leaflet map element -->
+                    <div id="leaflet-map" class="leaflet-map"></div>
+                </div>
+
+            </section>
+
+        </main>
+    </div>
+
+    <!-- Leaflet JS -->
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
+    
+    <!-- App Logic -->
     <script src="{{ url_for('static', filename='app.js') }}"></script>
 </body>
 </html>

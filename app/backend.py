@@ -41,6 +41,42 @@ city_counts = df_culture['libelle_geographique'].value_counts()
 # Villes moyennes avec un potentiel touristique raisonnable (entre 5 et 40 lieux culturels)
 potential_cities = city_counts[(city_counts >= 5) & (city_counts <= 40)].index.tolist()
 
+import math
+
+def haversine_distance(lat1, lon1, lat2, lon2):
+    R = 6371.0
+    dlat = math.radians(lat2 - lat1)
+    dlon = math.radians(lon2 - lon1)
+    a = math.sin(dlat / 2)**2 + math.cos(math.radians(lat1)) * math.cos(math.radians(lat2)) * math.sin(dlon / 2)**2
+    c = 2 * math.atan2(math.sqrt(a), math.sqrt(1 - a))
+    return R * c
+
+def get_city_pois(city, default_lat=None, default_lon=None, limit=12):
+    try:
+        sub = df_culture[df_culture['libelle_geographique'] == city].dropna(subset=['Nom'])
+        pois = []
+        for _, row in sub.head(limit).iterrows():
+            lat_val = row['Latitude']
+            lon_val = row['Longitude']
+            p_lat = float(lat_val) if (pd.notna(lat_val) and str(lat_val).strip() != '') else default_lat
+            p_lon = float(lon_val) if (pd.notna(lon_val) and str(lon_val).strip() != '') else default_lon
+            
+            nom = str(row['Nom']).replace('\ufffd', 'e')
+            domaine = str(row['Domaine']).replace('\ufffd', 'e') if pd.notna(row['Domaine']) else "Culture"
+            adresse = str(row['Adresse']).replace('\ufffd', 'e') if pd.notna(row['Adresse']) else ""
+            
+            pois.append({
+                "nom": nom,
+                "domaine": domaine,
+                "adresse": adresse,
+                "lat": p_lat,
+                "lon": p_lon
+            })
+        return pois
+    except Exception as e:
+        print(f"Erreur get_city_pois pour {city}: {e}")
+        return []
+
 def search_station(query):
     url = f"{BASE_URL_SNCF}/places"
     params = {'q': query}
@@ -66,7 +102,6 @@ def autocomplete():
     if len(q) < 2:
         return jsonify([])
     places = search_station(q)
-    # On filtre pour récupérer l'ID et le nom propre des gares
     results = [{"id": p['id'], "name": p['name']} for p in places if 'id' in p][:6]
     return jsonify(results)
 
@@ -80,7 +115,6 @@ def search():
     if cache_key in search_cache:
         return jsonify(search_cache[cache_key])
         
-    # Résolution des IDs si l'autocomplétion n'a pas été cliquée
     places_depart = search_station(depart)
     
     if not id_depart:
@@ -92,27 +126,23 @@ def search():
         
     dep_coords = get_coords(places_depart[0] if places_depart else None)
     
-    # Filtrer les villes pour ne garder que celles dans un rayon de ~150-200km (environ 1.5 - 2 degrés)
-    # Si on cherche pour < 60 min, 100km (1 deg) est suffisant.
     valid_cities = potential_cities
     if dep_coords:
         import numpy as np
         lat, lon = dep_coords
-        dist_deg = max_duration / 60.0 * 1.5 # 1.5 degrés (~150km) pour chaque heure de train
+        dist_deg = max_duration / 60.0 * 1.5
         
         distances = np.sqrt((city_coords['Latitude'] - lat)**2 + (city_coords['Longitude'] - lon)**2)
         nearby = distances[distances <= dist_deg].index.tolist()
         valid_cities = list(set(nearby) & set(potential_cities))
         
         if len(valid_cities) < 5:
-            # S'il n'y a pas assez de villes, on élargit
             nearby = distances[distances <= dist_deg * 2].index.tolist()
             valid_cities = list(set(nearby) & set(potential_cities))
             
     if not valid_cities:
         valid_cities = potential_cities
         
-    # On sélectionne jusqu'à 30 villes au hasard dans la liste des destinations proches pour tester les trajets
     sample_size = min(len(valid_cities), 30)
     sampled_cities = random.sample(valid_cities, sample_size)
     destinations_dict = {}
@@ -127,8 +157,8 @@ def search():
                 
             id_arrivee = places_arrivee[0]['id']
             nom_arrivee = places_arrivee[0]['name']
+            arr_coords = get_coords(places_arrivee[0])
             
-            # Recherche des itinéraires (on cherche plus de trajets pour avoir le détail)
             url = f"{BASE_URL_SNCF}/journeys"
             params = {'from': id_depart, 'to': id_arrivee, 'min_nb_journeys': 5}
             response = requests.get(url, params=params, auth=(API_KEY, ''), timeout=10)
@@ -156,6 +186,32 @@ def search():
                 min_duration = min(j["Durée (min)"] for j in valid_journeys)
                 min_co2 = min(j["CO2 (g)"] for j in valid_journeys)
                 
+                # Coordonnées destination
+                dest_lat = arr_coords[0] if arr_coords else None
+                dest_lon = arr_coords[1] if arr_coords else None
+                if dest_lat is None and city in city_coords.index:
+                    dest_lat = float(city_coords.loc[city]['Latitude'])
+                    dest_lon = float(city_coords.loc[city]['Longitude'])
+                
+                # Distance et calcul CO2 comparatif
+                dist_km = 0
+                if dep_coords and dest_lat is not None and dest_lon is not None:
+                    dist_km = round(haversine_distance(dep_coords[0], dep_coords[1], dest_lat, dest_lon), 1)
+                
+                road_km = round(dist_km * 1.25 if dist_km > 0 else (min_duration / 60.0 * 95), 1)
+                train_kg = round(min_co2 / 1000.0, 2) if min_co2 > 0 else round(max(0.2, dist_km * 0.012), 2)
+                voiture_kg = round(max(1.2, road_km * 0.190), 2)
+                covoit_kg = round(max(0.5, road_km * 0.065), 2)
+                voiture_elec_kg = round(max(0.4, road_km * 0.045), 2)
+                avion_kg = round(max(2.5, (dist_km if dist_km > 0 else road_km) * 0.230), 2)
+
+                saved_kg = round(max(0.1, voiture_kg - train_kg), 1)
+                saved_pct = int(round((1.0 - (train_kg / max(0.1, voiture_kg))) * 100))
+                saved_pct = max(10, min(99, saved_pct))
+                trees_equiv = round(saved_kg / 25.0, 1)
+
+                pois = get_city_pois(city, default_lat=dest_lat, default_lon=dest_lon, limit=12)
+
                 return {
                     "nom_arrivee": nom_arrivee,
                     "data": {
@@ -165,6 +221,26 @@ def search():
                         "Aménagements Cyclables": cycle_stats.get(city, 0),
                         "Durée (min)": min_duration,
                         "CO2 (g)": min_co2,
+                        "coords": [dest_lat, dest_lon] if (dest_lat is not None and dest_lon is not None) else None,
+                        "distance_km": dist_km,
+                        "co2_comparison": {
+                            "train_kg": train_kg,
+                            "voiture_kg": voiture_kg,
+                            "covoit_kg": covoit_kg,
+                            "voiture_elec_kg": voiture_elec_kg,
+                            "avion_kg": avion_kg,
+                            "saved_kg": saved_kg,
+                            "saved_pct": saved_pct,
+                            "trees_equiv": trees_equiv,
+                            "modes": [
+                                {"mode": "🚆 Train", "co2_kg": train_kg, "color": "#0088ce"},
+                                {"mode": "⚡ Voiture élec.", "co2_kg": voiture_elec_kg, "color": "#10b981"},
+                                {"mode": "👥 Covoiturage", "co2_kg": covoit_kg, "color": "#f59e0b"},
+                                {"mode": "🚘 Voiture thermique", "co2_kg": voiture_kg, "color": "#ef4444"},
+                                {"mode": "✈️ Avion", "co2_kg": avion_kg, "color": "#8b5cf6"}
+                            ]
+                        },
+                        "pois": pois,
                         "Trajets": valid_journeys
                     }
                 }
@@ -188,7 +264,6 @@ def search():
     df = pd.DataFrame(list(destinations_dict.values())).sort_values(by="Durée (min)")
     df['Durée (min)'] = df['Durée (min)'].astype(int)
     
-    # Graphique Altair
     chart = alt.Chart(df).mark_bar(
         cornerRadiusTopLeft=2, 
         cornerRadiusTopRight=2,
@@ -204,7 +279,10 @@ def search():
     ).configure_view(strokeOpacity=0).configure_axis(grid=False)
     
     response_data = {
-        "info": {"depart": nom_depart},
+        "info": {
+            "depart": nom_depart,
+            "dep_coords": dep_coords
+        },
         "journeys": df.to_dict(orient="records"),
         "chart_json": chart.to_dict()
     }
