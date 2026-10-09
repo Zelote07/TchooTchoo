@@ -91,60 +91,67 @@
                     </form>
                 </div>
 
-                <!-- CARD 2: ECOLOGY KPI ("Truc ecologie") -->
-                <div class="dash-card card-eco" id="card-eco">
-                    <div class="card-header">
-                        <div class="card-title-group">
-                            <span class="card-icon">🌱</span>
-                            <div>
-                                <h2 class="card-title">Bilan Écologique</h2>
-                                <span class="card-subtitle">Gain carbone de votre voyage</span>
+                <!-- CARD 2: ECOLOGY & COMPARATOR -->
+                <div class="dash-card card-eco-combined" id="card-eco-combined">
+                    <div class="eco-combined-layout">
+                        <!-- Left side: Bilan -->
+                        <div class="eco-left-col">
+                            <div class="card-header">
+                                <div class="card-title-group">
+                                    <span class="card-icon">🌱</span>
+                                    <div>
+                                        <h2 class="card-title">Bilan Écologique</h2>
+                                        <span class="card-subtitle">Gain carbone de votre voyage</span>
+                                    </div>
+                                </div>
+                                <span class="eco-badge-pill" id="eco-score-badge">Éco A+</span>
+                            </div>
+                            <div class="eco-body" id="eco-body">
+                                <div class="eco-metric-main">
+                                    <span class="eco-percentage" id="eco-saved-pct">-92%</span>
+                                    <span class="eco-metric-label">de CO₂ en moins vs voiture</span>
+                                </div>
+                                <div class="eco-stats-sub">
+                                    <div class="eco-sub-item">
+                                        <span class="eco-sub-value" id="eco-saved-kg">38.4 kg</span>
+                                        <span class="eco-sub-label">CO₂ évités</span>
+                                    </div>
+                                    <div class="eco-sub-divider"></div>
+                                    <div class="eco-sub-item">
+                                        <span class="eco-sub-value" id="eco-trees">1.5 🌳</span>
+                                        <span class="eco-sub-label">Arbres équivalents</span>
+                                    </div>
+                                    <div class="eco-sub-divider"></div>
+                                    <div class="eco-sub-item">
+                                        <span class="eco-sub-value" id="eco-train-co2">1.2 kg</span>
+                                        <span class="eco-sub-label">Émission train</span>
+                                    </div>
+                                </div>
                             </div>
                         </div>
-                        <span class="eco-badge-pill" id="eco-score-badge">Éco A+</span>
-                    </div>
-                    <div class="eco-body" id="eco-body">
-                        <div class="eco-metric-main">
-                            <span class="eco-percentage" id="eco-saved-pct">-92%</span>
-                            <span class="eco-metric-label">de CO₂ en moins vs voiture</span>
-                        </div>
-                        <div class="eco-stats-sub">
-                            <div class="eco-sub-item">
-                                <span class="eco-sub-value" id="eco-saved-kg">38.4 kg</span>
-                                <span class="eco-sub-label">CO₂ évités</span>
+
+                        <!-- Vertical Divider -->
+                        <div class="eco-main-divider"></div>
+
+                        <!-- Right side: Chart -->
+                        <div class="eco-right-col">
+                            <div class="card-header">
+                                <div class="card-title-group">
+                                    <span class="card-icon">📊</span>
+                                    <div>
+                                        <h2 class="card-title">Comparatif Transports</h2>
+                                        <span class="card-subtitle">Empreinte carbone (kg CO₂)</span>
+                                    </div>
+                                </div>
                             </div>
-                            <div class="eco-sub-divider"></div>
-                            <div class="eco-sub-item">
-                                <span class="eco-sub-value" id="eco-trees">1.5 🌳</span>
-                                <span class="eco-sub-label">Arbres équivalents</span>
-                            </div>
-                            <div class="eco-sub-divider"></div>
-                            <div class="eco-sub-item">
-                                <span class="eco-sub-value" id="eco-train-co2">1.2 kg</span>
-                                <span class="eco-sub-label">Émission train</span>
+                            <div class="chart-body" id="chart-body">
+                                <div class="co2-bars-container" id="co2-bars-list">
+                                    <!-- Barres comparatives générées dynamiquement -->
+                                </div>
                             </div>
                         </div>
                     </div>
                 </div>
-
-                <!-- CARD 3: COMPARATIVE CO2 CHART ("JSP" -> Comparateur CO2) -->
-                <div class="dash-card card-carbon-chart" id="card-chart">
-                    <div class="card-header">
-                        <div class="card-title-group">
-                            <span class="card-icon">📊</span>
-                            <div>
-                                <h2 class="card-title">Comparatif Transports</h2>
-                                <span class="card-subtitle">Empreinte carbone par mode (kg CO₂)</span>
-                            </div>
-                        </div>
-                    </div>
-                    <div class="chart-body" id="chart-body">
-                        <div class="co2-bars-container" id="co2-bars-list">
-                            <!-- Barres comparatives générées dynamiquement -->
-                        </div>
-                    </div>
-                </div>
-
             </section>
 
             <!-- ROW 2: BOTTOM 2 LARGE COLUMNS -->
@@ -232,10 +239,10 @@
                             <span id="map-route-text">Trajet : Paris ➔ Destination</span>
                         </div>
                         <div class="map-actions">
-                            <button type="button" class="map-action-btn" id="btn-fit-map" title="Recentrer le trajet et la ville">
+                            <button type="button" class="map-action-btn" id="btn-fit-map" title="Recentrer le trajet et la ville" aria-label="Recentrer la carte sur le trajet">
                                 🎯 Recentrer
                             </button>
-                            <button type="button" class="map-action-btn" id="btn-toggle-pois" title="Afficher/masquer les lieux culturels">
+                            <button type="button" class="map-action-btn" id="btn-toggle-pois" title="Afficher/masquer les lieux culturels" aria-label="Afficher ou masquer les lieux culturels sur la carte">
                                 🏛️ Filtrer POIs
                             </button>
                         </div>

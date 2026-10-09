@@ -46,10 +46,10 @@ function initLeafletMap() {
     // Zoom control at bottom right
     L.control.zoom({ position: 'bottomright' }).addTo(state.map);
 
-    // Modern clean CartoDB Voyager tile layer
-    L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png', {
+    // OpenStreetMap standard tile layer
+    L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
         maxZoom: 19,
-        subdomains: 'abcd'
+        attribution: '&copy; <a href="http://www.openstreetmap.org/copyright">OpenStreetMap</a>'
     }).addTo(state.map);
 
     // Feature group for POI markers
