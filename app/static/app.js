@@ -184,22 +184,44 @@ function displayAllDestinationsOnMap() {
     }
     
     const journeys = state.searchData.journeys;
-    document.getElementById('map-route-text').textContent = `${journeys.length} destinations trouvées. Sélectionnez-en une sur la carte.`;
+    document.getElementById('map-route-text').textContent = `${journeys.length} destinations trouvées. Cliquez sur une gare pour voir son tracé et ses trains.`;
     
     journeys.forEach(j => {
         const destCoords = j.coords;
         if (!destCoords || isNaN(destCoords[0])) return;
 
-        const marker = L.marker(destCoords).addTo(state.map);
-        marker.bindTooltip(`<b>${j['Ville']}</b><br>${j['Durée (min)']} min`);
+        // Custom destination icon
+        const destSvg = `<svg viewBox="0 0 24 24" fill="#0088ce" stroke="#ffffff" stroke-width="2" width="26" height="26"><circle cx="12" cy="12" r="7"/><circle cx="12" cy="12" r="3" fill="#ffffff"/></svg>`;
+        const destIcon = L.divIcon({
+            html: destSvg,
+            className: 'destination-marker-icon',
+            iconSize: [26, 26],
+            iconAnchor: [13, 13],
+            tooltipAnchor: [0, -13],
+            popupAnchor: [0, -13]
+        });
+
+        const marker = L.marker(destCoords, { icon: destIcon }).addTo(state.map);
+        marker.bindTooltip(`<b>${escapeHtml(j['Ville'])}</b><br>${j['Durée (min)']} min`);
         
+        // Tracé géographique réel issu de l'API SNCF ou ligne directe de repli
+        const hasGeojson = j.geojson_coords && Array.isArray(j.geojson_coords) && j.geojson_coords.length > 1;
+        const trackPoints = hasGeojson ? j.geojson_coords : (depCoords ? [depCoords, destCoords] : null);
+
         let polyline = null;
-        if (depCoords) {
-            polyline = L.polyline([depCoords, destCoords], { color: '#888', weight: 2, opacity: 0.5 }).addTo(state.map);
+        if (trackPoints) {
+            polyline = L.polyline(trackPoints, { 
+                color: '#64748b', 
+                weight: 2.5, 
+                opacity: 0.4,
+                lineCap: 'round',
+                lineJoin: 'round'
+            }).addTo(state.map);
         }
 
-        marker.on('click', () => { selectDestination(j); });
-        if (polyline) polyline.on('click', () => { selectDestination(j); });
+        const onSelect = () => { selectDestination(j); };
+        marker.on('click', onSelect);
+        if (polyline) polyline.on('click', onSelect);
 
         state.mapLayers.destinations.push({ j, marker, polyline });
         bounds.push(destCoords);
@@ -215,12 +237,156 @@ function displayAllDestinationsOnMap() {
 }
 
 /* ========================================================
+   Helpers pour l'affichage des trains
+   ======================================================== */
+function escapeHtml(str) {
+    if (!str) return '';
+    return String(str)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#039;');
+}
+
+function getTrainBadgeClass(mode) {
+    const m = (mode || '').toUpperCase();
+    if (m.includes('TGV') || m.includes('INOUI')) return 'mode-tgv';
+    if (m.includes('OUIGO')) return 'mode-ouigo';
+    if (m.includes('TER') || m.includes('MOBIGO') || m.includes('NOMAD') || m.includes('ALEO') || m.includes('REMI')) return 'mode-ter';
+    if (m.includes('INTERCIT') || m.includes('IC')) return 'mode-intercites';
+    return 'mode-train';
+}
+
+function getTrainIcon(mode) {
+    const m = (mode || '').toUpperCase();
+    if (m.includes('TGV') || m.includes('INOUI')) return '🚄';
+    if (m.includes('OUIGO')) return '⚡';
+    if (m.includes('INTERCIT') || m.includes('IC')) return '🚅';
+    return '🚆';
+}
+
+function buildTrainPopupHtml(j) {
+    const trains = j.trains || [];
+    let trainBadges = '';
+    
+    if (trains.length > 0) {
+        trainBadges = trains.map(t => {
+            const badgeClass = getTrainBadgeClass(t.mode);
+            const icon = getTrainIcon(t.mode);
+            return `
+                <div class="popup-train-item">
+                    <span class="popup-train-mode ${badgeClass}">${icon} ${escapeHtml(t.mode || 'Train')}</span>
+                    ${t.numero ? `<span class="popup-train-num">N° ${escapeHtml(t.numero)}</span>` : ''}
+                    ${t.direction ? `<div class="popup-train-dir">➔ Direction ${escapeHtml(t.direction)}</div>` : ''}
+                </div>
+            `;
+        }).join('');
+    } else {
+        trainBadges = `
+            <div class="popup-train-item">
+                <span class="popup-train-mode mode-train">🚆 Train direct</span>
+            </div>
+        `;
+    }
+
+    const firstJourney = (j.Trajets && j.Trajets[0]) ? j.Trajets[0] : null;
+    const horaires = firstJourney 
+        ? `<div class="popup-hours">🕒 Horaires : <b>${firstJourney['Départ']}</b> ➔ <b>${firstJourney['Arrivée']}</b> (${j['Durée (min)']} min)</div>` 
+        : `<div class="popup-hours">⏱️ Durée min : <b>${j['Durée (min)']} min</b></div>`;
+
+    return `
+        <div class="custom-popup-content">
+            <h3 class="popup-city-title">📍 ${escapeHtml(j['Ville'])}</h3>
+            <div class="popup-sub-station">${escapeHtml(j['Gare Destination'] || '')}</div>
+            <div class="popup-trains-list">
+                ${trainBadges}
+            </div>
+            ${horaires}
+            <div class="popup-co2">🌱 Émission carbone : <b>${((j['CO2 (g)'] || 0) / 1000).toFixed(2)} kg CO₂</b></div>
+        </div>
+    `;
+}
+
+function updateTrainDetailsUI(j) {
+    const banner = document.getElementById('train-detail-card');
+    if (!banner) return;
+    banner.classList.remove('hidden');
+
+    const trains = j.trains || [];
+    const badgesGroup = document.getElementById('train-badges-group');
+    const timesGroup = document.getElementById('train-summary-times');
+    const transfersGroup = document.getElementById('train-transfers-info');
+    const stepsGroup = document.getElementById('train-steps-breakdown');
+
+    // Badges des trains
+    if (trains.length > 0) {
+        badgesGroup.innerHTML = trains.map(t => {
+            const badgeClass = getTrainBadgeClass(t.mode);
+            const icon = getTrainIcon(t.mode);
+            return `
+                <span class="train-badge ${badgeClass}">
+                    ${icon} ${escapeHtml(t.mode || 'Train')}
+                    ${t.numero ? `<span class="train-number-tag">N° ${escapeHtml(t.numero)}</span>` : ''}
+                </span>
+            `;
+        }).join('');
+    } else {
+        badgesGroup.innerHTML = `
+            <span class="train-badge mode-train">
+                🚆 Train SNCF
+            </span>
+        `;
+    }
+
+    // Horaires & Durée
+    const firstJourney = (j.Trajets && j.Trajets[0]) ? j.Trajets[0] : null;
+    if (firstJourney) {
+        timesGroup.innerHTML = `🕒 <b>${firstJourney['Départ']}</b> ➔ <b>${firstJourney['Arrivée']}</b> <span class="route-time-pill">${j['Durée (min)']} min</span>`;
+    } else {
+        timesGroup.innerHTML = `⏱️ <span class="route-time-pill">${j['Durée (min)']} min</span>`;
+    }
+
+    // Correspondances
+    const nbTransfers = j.nb_transfers !== undefined ? j.nb_transfers : Math.max(0, trains.length - 1);
+    if (nbTransfers === 0) {
+        transfersGroup.innerHTML = `<span class="transfer-pill direct">✓ Trajet Direct</span>`;
+    } else {
+        transfersGroup.innerHTML = `<span class="transfer-pill transfer">⚡ ${nbTransfers} correspondance${nbTransfers > 1 ? 's' : ''}</span>`;
+    }
+
+    // Détail des correspondances si > 1 train
+    if (trains.length > 1) {
+        stepsGroup.style.display = 'flex';
+        stepsGroup.innerHTML = trains.map((t, idx) => {
+            const badgeClass = getTrainBadgeClass(t.mode);
+            const icon = getTrainIcon(t.mode);
+            const timeStr = (t.dep_time && t.arr_time) ? `(${t.dep_time} - ${t.arr_time})` : '';
+            return `
+                <div class="train-step-row">
+                    <span style="font-weight:700; color:var(--sncf-blue-light)">${idx + 1}.</span>
+                    <span class="train-badge ${badgeClass}" style="font-size:0.72rem; padding:0.15rem 0.5rem;">
+                        ${icon} ${escapeHtml(t.mode || 'Train')} ${t.numero ? 'n° ' + escapeHtml(t.numero) : ''}
+                    </span>
+                    <span>${escapeHtml(t.from || '')} ➔ ${escapeHtml(t.to || '')}</span>
+                    ${timeStr ? `<span style="color:#94a3b8">${timeStr}</span>` : ''}
+                </div>
+            `;
+        }).join('');
+    } else {
+        stepsGroup.style.display = 'none';
+        stepsGroup.innerHTML = '';
+    }
+}
+
+/* ========================================================
    Update UI for Selected Destination
    ======================================================== */
 function selectDestination(j) {
     state.currentCity = j;
     
     highlightSelectedRoute(j);
+    updateTrainDetailsUI(j);
     updateCarbonComparisonChart(j);
     updateCharts(j);
     updateAlternatives(j);
@@ -230,15 +396,29 @@ function highlightSelectedRoute(selectedJ) {
     state.mapLayers.destinations.forEach(item => {
         if (item.j['Ville'] === selectedJ['Ville']) {
             if (item.polyline) {
-                item.polyline.setStyle({ color: '#0088ce', weight: 4, opacity: 1 });
+                item.polyline.setStyle({ color: '#00a8ff', weight: 5, opacity: 0.95 });
                 item.polyline.bringToFront();
             }
             item.marker.setZIndexOffset(1000);
+            
+            // Ouvre le popup détaillé sur le marqueur
+            const popupHtml = buildTrainPopupHtml(selectedJ);
+            item.marker.bindPopup(popupHtml, { maxWidth: 320, className: 'custom-train-popup' }).openPopup();
+
+            // Met à jour la barre de texte d'en-tête
+            const trains = selectedJ.trains || [];
+            let trainStr = trains.map(t => `${t.mode || 'Train'}${t.numero ? ' n°' + t.numero : ''}`).join(' + ');
+            if (!trainStr) trainStr = 'Train direct';
+
             const info = state.searchData.info;
-            document.getElementById('map-route-text').textContent = `Trajet sélectionné : ${info.depart || 'Départ'} ➔ ${selectedJ['Ville']} (${selectedJ['Durée (min)']} min)`;
+            document.getElementById('map-route-text').innerHTML = `
+                <b>${escapeHtml(info.depart || 'Départ')} ➔ ${escapeHtml(selectedJ['Ville'])}</b> 
+                <span class="route-time-pill">${selectedJ['Durée (min)']} min</span>
+                <span class="route-train-pill">🚆 ${escapeHtml(trainStr)}</span>
+            `;
         } else {
             if (item.polyline) {
-                item.polyline.setStyle({ color: '#888', weight: 2, opacity: 0.3 });
+                item.polyline.setStyle({ color: '#64748b', weight: 2.5, opacity: 0.35 });
             }
             item.marker.setZIndexOffset(0);
         }

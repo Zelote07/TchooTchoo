@@ -1243,6 +1243,234 @@ body {
 }
 
 /* ========================================================
+   Train Detail Card & Popups
+   ======================================================== */
+.train-detail-card {
+    background: rgba(15, 23, 42, 0.9);
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    border-radius: var(--radius-md);
+    margin: 0 1.4rem 0.8rem 1.4rem;
+    padding: 0.75rem 1rem;
+    backdrop-filter: blur(8px);
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.35);
+    transition: all 0.3s ease;
+}
+
+.train-detail-card.hidden {
+    display: none;
+}
+
+.train-detail-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 1rem;
+    flex-wrap: wrap;
+}
+
+.train-badges-group {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    flex-wrap: wrap;
+}
+
+.train-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.4rem;
+    padding: 0.3rem 0.75rem;
+    border-radius: 9999px;
+    font-size: 0.8rem;
+    font-weight: 700;
+    letter-spacing: 0.02em;
+    color: #fff;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+}
+
+.train-badge.mode-tgv {
+    background: linear-gradient(135deg, #7c3aed, #c026d3);
+    box-shadow: 0 2px 10px rgba(124, 58, 237, 0.4);
+}
+
+.train-badge.mode-ouigo {
+    background: linear-gradient(135deg, #0284c7, #db2777);
+    box-shadow: 0 2px 10px rgba(2, 132, 199, 0.4);
+}
+
+.train-badge.mode-ter {
+    background: linear-gradient(135deg, #0284c7, #0ea5e9);
+    box-shadow: 0 2px 10px rgba(2, 132, 199, 0.4);
+}
+
+.train-badge.mode-intercites {
+    background: linear-gradient(135deg, #ea580c, #f97316);
+    box-shadow: 0 2px 10px rgba(234, 88, 12, 0.4);
+}
+
+.train-badge.mode-train {
+    background: linear-gradient(135deg, #2563eb, #3b82f6);
+    box-shadow: 0 2px 10px rgba(37, 99, 235, 0.4);
+}
+
+.train-number-tag {
+    background: rgba(255, 255, 255, 0.15);
+    padding: 0.15rem 0.45rem;
+    border-radius: 6px;
+    font-size: 0.75rem;
+    font-weight: 700;
+    letter-spacing: 0.04em;
+}
+
+.train-summary-times {
+    font-size: 0.85rem;
+    color: #e2e8f0;
+    font-weight: 500;
+}
+
+.train-transfers-info .transfer-pill {
+    padding: 0.25rem 0.65rem;
+    border-radius: 9999px;
+    font-size: 0.75rem;
+    font-weight: 700;
+}
+
+.transfer-pill.direct {
+    background: rgba(16, 185, 129, 0.18);
+    color: #34d399;
+    border: 1px solid rgba(16, 185, 129, 0.35);
+}
+
+.transfer-pill.transfer {
+    background: rgba(245, 158, 11, 0.18);
+    color: #fbbf24;
+    border: 1px solid rgba(245, 158, 11, 0.35);
+}
+
+.train-steps-breakdown {
+    margin-top: 0.6rem;
+    padding-top: 0.6rem;
+    border-top: 1px solid rgba(255, 255, 255, 0.08);
+    display: flex;
+    flex-direction: column;
+    gap: 0.4rem;
+}
+
+.train-step-row {
+    display: flex;
+    align-items: center;
+    gap: 0.6rem;
+    font-size: 0.78rem;
+    color: #cbd5e1;
+    flex-wrap: wrap;
+}
+
+.train-step-arrow {
+    color: var(--sncf-blue-light);
+    font-weight: 700;
+}
+
+.route-time-pill, .route-train-pill {
+    background: rgba(255, 255, 255, 0.1);
+    padding: 0.15rem 0.5rem;
+    border-radius: 9999px;
+    font-size: 0.78rem;
+    font-weight: 600;
+    color: #fff;
+    margin-left: 0.3rem;
+}
+
+.route-train-pill {
+    background: rgba(0, 136, 206, 0.25);
+    color: var(--sncf-blue-light);
+    border: 1px solid rgba(0, 136, 206, 0.4);
+}
+
+/* Custom Leaflet Train Popup */
+.custom-train-popup .leaflet-popup-content-wrapper {
+    background: #0f172a !important;
+    border: 1px solid rgba(255, 255, 255, 0.15) !important;
+    border-radius: var(--radius-md) !important;
+    box-shadow: 0 10px 25px rgba(0, 0, 0, 0.5) !important;
+    color: #fff !important;
+    padding: 4px;
+}
+
+.custom-train-popup .leaflet-popup-tip {
+    background: #0f172a !important;
+    border: 1px solid rgba(255, 255, 255, 0.15) !important;
+}
+
+.custom-popup-content {
+    font-family: 'Inter', sans-serif;
+    padding: 0.3rem;
+}
+
+.popup-city-title {
+    font-size: 1.05rem;
+    font-weight: 800;
+    margin: 0 0 0.2rem 0;
+    color: #fff;
+}
+
+.popup-sub-station {
+    font-size: 0.75rem;
+    color: var(--text-muted);
+    margin-bottom: 0.6rem;
+}
+
+.popup-trains-list {
+    display: flex;
+    flex-direction: column;
+    gap: 0.4rem;
+    margin-bottom: 0.6rem;
+}
+
+.popup-train-item {
+    background: rgba(255, 255, 255, 0.05);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 6px;
+    padding: 0.35rem 0.5rem;
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+    flex-wrap: wrap;
+}
+
+.popup-train-mode {
+    font-size: 0.75rem;
+    font-weight: 700;
+    padding: 0.15rem 0.45rem;
+    border-radius: 4px;
+    color: #fff;
+}
+
+.popup-train-num {
+    font-size: 0.75rem;
+    font-weight: 700;
+    color: #f1f5f9;
+}
+
+.popup-train-dir {
+    font-size: 0.7rem;
+    color: #94a3b8;
+    width: 100%;
+}
+
+.popup-hours {
+    font-size: 0.8rem;
+    color: #cbd5e1;
+    margin-bottom: 0.4rem;
+}
+
+.popup-co2 {
+    font-size: 0.75rem;
+    color: var(--eco-green-light);
+    border-top: 1px solid rgba(255, 255, 255, 0.08);
+    padding-top: 0.4rem;
+}
+
+/* ========================================================
    RESPONSIVE DESIGN & CHART FIXES
    ======================================================== */
 .dashboard-grid-new, .col-left, .col-right, .bottom-split-cards, .card-eco-new, .card-radar, .card-alts {

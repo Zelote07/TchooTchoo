@@ -42,6 +42,78 @@ city_counts = df_culture['libelle_geographique'].value_counts()
 potential_cities = city_counts[(city_counts >= 5) & (city_counts <= 40)].index.tolist()
 
 import math
+import numpy as np
+
+# Chargement du réseau ferré national pour obtenir les vrais tracés physiques
+lines_db = []
+rail_geojson_path = os.path.join(os.path.dirname(__file__), '../data/reseau_ferre_lignes.geojson')
+if os.path.exists(rail_geojson_path):
+    try:
+        with open(rail_geojson_path, 'r', encoding='utf-8') as f:
+            geo_data = json.load(f)
+        for feat in geo_data.get('features', []):
+            if 'Exploit' in (feat.get('properties', {}).get('libelle') or ''):
+                coords = np.array(feat['geometry']['coordinates'])
+                if len(coords) >= 2:
+                    latlon = coords[:, [1, 0]]
+                    min_lat, min_lon = np.min(latlon, axis=0)
+                    max_lat, max_lon = np.max(latlon, axis=0)
+                    lines_db.append({
+                        'code': feat.get('properties', {}).get('code_ligne'),
+                        'coords': latlon,
+                        'bbox': (min_lat, max_lat, min_lon, max_lon)
+                    })
+        print(f"Réseau Ferré National initialisé ({len(lines_db)} lignes exploitées chargées).")
+    except Exception as e:
+        print(f"Erreur lors du chargement du Réseau Ferré National : {e}")
+
+def get_rail_segment(pt1, pt2):
+    """
+    Extrait le tronçon physique réel des voies ferrées entre deux gares.
+    Si un tronçon ferroviaire direct est trouvé dans le Réseau Ferré National,
+    retourne les coordonnées réelles des rails (avec toutes les courbes).
+    Sinon, retourne la ligne directe [pt1, pt2].
+    """
+    if not lines_db or pt1 is None or pt2 is None:
+        return [pt1, pt2] if (pt1 and pt2) else []
+        
+    p1 = np.array(pt1)
+    p2 = np.array(pt2)
+    best_candidate = None
+    min_dist = 1e9
+    best_indices = None
+    
+    for l in lines_db:
+        min_lat, max_lat, min_lon, max_lon = l['bbox']
+        if not (min(p1[0], p2[0]) - 0.1 <= max_lat and max(p1[0], p2[0]) + 0.1 >= min_lat and
+                min(p1[1], p2[1]) - 0.1 <= max_lon and max(p1[1], p2[1]) + 0.1 >= min_lon):
+            continue
+            
+        coords = l['coords']
+        d1 = np.min(np.sum((coords - p1)**2, axis=1))
+        d2 = np.min(np.sum((coords - p2)**2, axis=1))
+        
+        # Les deux gares doivent être proches de la voie ferrée (< ~5 km)
+        if d1 < 0.003 and d2 < 0.003:
+            comb = d1 + d2
+            if comb < min_dist:
+                min_dist = comb
+                best_candidate = l
+                i1 = np.argmin(np.sum((coords - p1)**2, axis=1))
+                i2 = np.argmin(np.sum((coords - p2)**2, axis=1))
+                best_indices = (i1, i2)
+                
+    if best_candidate and best_indices:
+        coords = best_candidate['coords']
+        i1, i2 = best_indices
+        sliced = coords[i1:i2+1] if i1 <= i2 else coords[i2:i1+1][::-1]
+        # Optimisation : décimation légère si le tronçon compte un très grand nombre de points
+        if len(sliced) > 150:
+            step = 2 if len(sliced) < 500 else 3
+            sliced = np.vstack([sliced[0], sliced[1:-1:step], sliced[-1]])
+        return sliced.tolist()
+        
+    return [pt1, pt2]
 
 def haversine_distance(lat1, lon1, lat2, lon2):
     R = 6371.0
@@ -173,17 +245,87 @@ def search():
                     arr_dt = datetime.strptime(j['arrival_date_time'], '%Y%m%dT%H%M%S')
                     co2 = j.get('co2_emission', {}).get('value', 0)
                     
+                    # Extraction des trains et du tracé géographique
+                    trains = []
+                    geojson_coords = []
+                    for s in j.get('sections', []):
+                        if s.get('type') == 'public_transport':
+                            disp = s.get('display_informations', {})
+                            mode = disp.get('commercial_mode') or disp.get('physical_mode') or 'Train'
+                            num = disp.get('headsign') or disp.get('trip_short_name') or disp.get('code') or ''
+                            direction = disp.get('direction', '')
+                            network = disp.get('network', '')
+                            company = disp.get('company', '')
+                            dep_st = s.get('from', {}).get('name', '')
+                            arr_st = s.get('to', {}).get('name', '')
+                            s_dep_time = ""
+                            s_arr_time = ""
+                            try:
+                                if s.get('departure_date_time'):
+                                    s_dep_time = datetime.strptime(s['departure_date_time'], '%Y%m%dT%H%M%S').strftime('%H:%M')
+                                if s.get('arrival_date_time'):
+                                    s_arr_time = datetime.strptime(s['arrival_date_time'], '%Y%m%dT%H%M%S').strftime('%H:%M')
+                            except Exception:
+                                pass
+                                
+                            trains.append({
+                                "mode": mode,
+                                "numero": num,
+                                "direction": direction,
+                                "network": network,
+                                "company": company,
+                                "from": dep_st,
+                                "to": arr_st,
+                                "dep_time": s_dep_time,
+                                "arr_time": s_arr_time
+                            })
+                            
+                        # Tracé géographique : enrichissement avec les vraies courbes physiques des rails
+                        if s.get('type') == 'public_transport':
+                            stops_geo = s.get('geojson', {}).get('coordinates', [])
+                            if len(stops_geo) >= 2:
+                                for k in range(len(stops_geo) - 1):
+                                    p_a = [stops_geo[k][1], stops_geo[k][0]]
+                                    p_b = [stops_geo[k+1][1], stops_geo[k+1][0]]
+                                    seg = get_rail_segment(p_a, p_b)
+                                    for pt in seg:
+                                        p_rnd = [round(float(pt[0]), 5), round(float(pt[1]), 5)]
+                                        if not geojson_coords or geojson_coords[-1] != p_rnd:
+                                            geojson_coords.append(p_rnd)
+                            elif len(stops_geo) == 1:
+                                p_rnd = [round(float(stops_geo[0][1]), 5), round(float(stops_geo[0][0]), 5)]
+                                if not geojson_coords or geojson_coords[-1] != p_rnd:
+                                    geojson_coords.append(p_rnd)
+                        elif s.get('geojson') and s['geojson'].get('coordinates'):
+                            geo = s['geojson']
+                            gtype = geo.get('type')
+                            coords_to_add = []
+                            if gtype == 'LineString':
+                                coords_to_add = geo['coordinates']
+                            elif gtype == 'MultiLineString':
+                                for line in geo['coordinates']:
+                                    coords_to_add.extend(line)
+                            for pt in coords_to_add:
+                                if len(pt) >= 2:
+                                    p_rnd = [round(float(pt[1]), 5), round(float(pt[0]), 5)]
+                                    if not geojson_coords or geojson_coords[-1] != p_rnd:
+                                        geojson_coords.append(p_rnd)
+                    
                     valid_journeys.append({
                         "Départ": dep_dt.strftime('%H:%M'),
                         "Arrivée": arr_dt.strftime('%H:%M'),
                         "Durée (min)": duration_min,
                         "CO2 (g)": co2,
-                        "dep_dt_iso": dep_dt.isoformat()
+                        "dep_dt_iso": dep_dt.isoformat(),
+                        "trains": trains,
+                        "geojson_coords": geojson_coords,
+                        "nb_transfers": j.get('nb_transfers', max(0, len(trains) - 1))
                     })
             
             if valid_journeys:
                 valid_journeys.sort(key=lambda x: x["dep_dt_iso"])
-                min_duration = min(j["Durée (min)"] for j in valid_journeys)
+                fastest_journey = min(valid_journeys, key=lambda x: x["Durée (min)"])
+                min_duration = fastest_journey["Durée (min)"]
                 min_co2 = min(j["CO2 (g)"] for j in valid_journeys)
                 
                 # Coordonnées destination
@@ -192,6 +334,12 @@ def search():
                 if dest_lat is None and city in city_coords.index:
                     dest_lat = float(city_coords.loc[city]['Latitude'])
                     dest_lon = float(city_coords.loc[city]['Longitude'])
+                
+                # Trains et tracé géographique du meilleur trajet (courbes physiques)
+                best_trains = fastest_journey.get("trains", [])
+                best_coords = fastest_journey.get("geojson_coords", [])
+                if not best_coords and dep_coords and dest_lat is not None and dest_lon is not None:
+                    best_coords = get_rail_segment(dep_coords, [dest_lat, dest_lon])
                 
                 # Distance et calcul CO2 comparatif
                 dist_km = 0
@@ -228,6 +376,9 @@ def search():
                         "CO2 (g)": min_co2,
                         "coords": [dest_lat, dest_lon] if (dest_lat is not None and dest_lon is not None) else None,
                         "distance_km": dist_km,
+                        "trains": best_trains,
+                        "geojson_coords": best_coords,
+                        "nb_transfers": fastest_journey.get("nb_transfers", 0),
                         "co2_comparison": {
                             "train_kg": train_kg,
                             "voiture_kg": voiture_kg,
