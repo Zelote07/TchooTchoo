@@ -211,6 +211,11 @@ def search():
                 trees_equiv = round(saved_kg / 25.0, 1)
 
                 pois = get_city_pois(city, default_lat=dest_lat, default_lon=dest_lon, limit=12)
+                
+                # Récupération de tous les lieux culturels de la ville pour les statistiques du radar chart
+                sub = df_culture[df_culture['libelle_geographique'] == city]
+                types_counts = sub['Type équipement ou lieu'].fillna('Autre').value_counts().to_dict()
+                domaine_counts = sub['Domaine'].fillna('Autre').value_counts().to_dict()
 
                 return {
                     "nom_arrivee": nom_arrivee,
@@ -241,7 +246,9 @@ def search():
                             ]
                         },
                         "pois": pois,
-                        "Trajets": valid_journeys
+                        "Trajets": valid_journeys,
+                        "types_counts": types_counts,
+                        "domaine_counts": domaine_counts
                     }
                 }
         except Exception as e:

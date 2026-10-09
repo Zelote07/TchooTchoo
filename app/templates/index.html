@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>TchooTchoo - Tableau de Bord Éco-Explorateur</title>
+    <title>Dashboard Tourisme Discret en France</title>
     <!-- Google Fonts -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -12,46 +12,30 @@
     <!-- Leaflet CSS -->
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="" />
     
+    <!-- Chart.js -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
     <!-- Custom CSS -->
     <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+    <script src="https://cdn.plot.ly/plotly-2.27.0.min.js" charset="utf-8"></script>
 </head>
 <body>
     <div class="dashboard-wrapper">
         <!-- Top App Navigation Bar -->
-        <header class="app-header">
-            <div class="brand">
-                <div class="brand-badge">
-                    <span class="train-icon">🚆</span>
-                </div>
-                <div class="brand-text">
-                    <h1>TchooTchoo<span>Connect</span></h1>
-                    <p class="tagline">L'explorateur ferroviaire & culturel bas-carbone</p>
-                </div>
-            </div>
-            <div class="header-status">
-                <div class="status-indicator">
-                    <span class="status-dot"></span>
-                    <span class="status-text" id="status-label">Prêt à explorer</span>
-                </div>
-            </div>
+        <header class="app-header custom-red-header">
+            <h1 class="main-title">Titre : Dashboard Tourisme Discret en France</h1>
         </header>
 
         <!-- Main Dashboard Content Grid -->
-        <main class="dashboard-grid">
+        <main class="dashboard-grid-new">
             
-            <!-- ROW 1: TOP 3 CARDS -->
-            <section class="top-row">
+            <!-- LEFT COLUMN -->
+            <div class="col-left">
                 
-                <!-- CARD 1: SEARCH & DURATION -->
+                <!-- Filtre Ville + Durée -->
                 <div class="dash-card card-search" id="card-search">
                     <div class="card-header">
-                        <div class="card-title-group">
-                            <span class="card-icon">🎯</span>
-                            <div>
-                                <h2 class="card-title">Ville de départ & Durée</h2>
-                                <span class="card-subtitle">Trouvez votre prochaine escapade en train</span>
-                            </div>
-                        </div>
+                        <h2 class="card-title">Filtre Ville + Durée</h2>
                     </div>
                     <form id="search-form" class="search-form" autocomplete="off">
                         <div class="form-inputs-row">
@@ -59,12 +43,11 @@
                                 <label for="depart">Gare de départ</label>
                                 <div class="input-with-icon">
                                     <span class="input-icon">📍</span>
-                                    <input type="text" id="depart" placeholder="Ex: Paris, Lyon, Bordeaux..." required autocomplete="off" value="Paris">
+                                    <input type="text" id="depart" placeholder="Ex: Paris..." required autocomplete="off" value="Paris">
                                     <input type="hidden" id="id_depart">
                                 </div>
                                 <ul class="autocomplete-list" id="depart-list"></ul>
                             </div>
-
                             <div class="form-group duration-group">
                                 <div class="duration-label-row">
                                     <label for="max_duration">Durée max :</label>
@@ -73,185 +56,68 @@
                                 <div class="duration-slider-container">
                                     <input type="range" id="max_duration" min="30" max="480" step="15" value="180">
                                 </div>
-                                <div class="duration-presets">
-                                    <button type="button" class="preset-btn" data-min="60">1h</button>
-                                    <button type="button" class="preset-btn" data-min="120">2h</button>
-                                    <button type="button" class="preset-btn active" data-min="180">3h</button>
-                                    <button type="button" class="preset-btn" data-min="240">4h</button>
-                                </div>
                             </div>
-
                             <div class="form-submit-group">
                                 <button type="submit" id="submit-btn" class="btn-primary">
                                     <span class="btn-spinner hidden" id="search-spinner"></span>
-                                    <span class="btn-text">Explorer 🚀</span>
+                                    <span class="btn-text">Rechercher</span>
                                 </button>
                             </div>
                         </div>
                     </form>
                 </div>
 
-                <!-- CARD 2: ECOLOGY & COMPARATOR -->
-                <div class="dash-card card-eco-combined" id="card-eco-combined">
-                    <div class="eco-combined-layout">
-                        <!-- Left side: Bilan -->
-                        <div class="eco-left-col">
-                            <div class="card-header">
-                                <div class="card-title-group">
-                                    <span class="card-icon">🌱</span>
-                                    <div>
-                                        <h2 class="card-title">Bilan Écologique</h2>
-                                        <span class="card-subtitle">Gain carbone de votre voyage</span>
-                                    </div>
-                                </div>
-                                <span class="eco-badge-pill" id="eco-score-badge">Éco A+</span>
-                            </div>
-                            <div class="eco-body" id="eco-body">
-                                <div class="eco-metric-main">
-                                    <span class="eco-percentage" id="eco-saved-pct">-92%</span>
-                                    <span class="eco-metric-label">de CO₂ en moins vs voiture</span>
-                                </div>
-                                <div class="eco-stats-sub">
-                                    <div class="eco-sub-item">
-                                        <span class="eco-sub-value" id="eco-saved-kg">38.4 kg</span>
-                                        <span class="eco-sub-label">CO₂ évités</span>
-                                    </div>
-                                    <div class="eco-sub-divider"></div>
-                                    <div class="eco-sub-item">
-                                        <span class="eco-sub-value" id="eco-trees">1.5 🌳</span>
-                                        <span class="eco-sub-label">Arbres équivalents</span>
-                                    </div>
-                                    <div class="eco-sub-divider"></div>
-                                    <div class="eco-sub-item">
-                                        <span class="eco-sub-value" id="eco-train-co2">1.2 kg</span>
-                                        <span class="eco-sub-label">Émission train</span>
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-
-                        <!-- Vertical Divider -->
-                        <div class="eco-main-divider"></div>
-
-                        <!-- Right side: Chart -->
-                        <div class="eco-right-col">
-                            <div class="card-header">
-                                <div class="card-title-group">
-                                    <span class="card-icon">📊</span>
-                                    <div>
-                                        <h2 class="card-title">Comparatif Transports</h2>
-                                        <span class="card-subtitle">Empreinte carbone (kg CO₂)</span>
-                                    </div>
-                                </div>
-                            </div>
-                            <div class="chart-body" id="chart-body">
-                                <div class="co2-bars-container" id="co2-bars-list">
-                                    <!-- Barres comparatives générées dynamiquement -->
-                                </div>
-                            </div>
-                        </div>
+                <!-- Carte (Interactions & Sélection) -->
+                <div class="dash-card card-map-new" id="card-map">
+                    <div class="card-header" style="padding-bottom: 0.5rem;">
+                        <h2 class="card-title">Carte des destinations</h2>
                     </div>
-                </div>
-            </section>
-
-            <!-- ROW 2: BOTTOM 2 LARGE COLUMNS -->
-            <section class="bottom-row">
-
-                <!-- CARD 4 & 5 (LEFT): DESTINATION SELECTOR & POINTS OF INTEREST -->
-                <div class="dash-card card-destination-details" id="card-destination">
-                    
-                    <!-- Card 4 Sub-Header: "Ville a visiter" -->
-                    <div class="destination-header-block">
-                        <div class="destination-select-wrapper">
-                            <div class="select-label-row">
-                                <label for="destination-select" class="dest-label">
-                                    <span class="pin-icon">🏙️</span> Ville à visiter :
-                                </label>
-                                <div class="sort-toggles">
-                                    <button type="button" class="sort-btn active" id="sort-duration" title="Trier par durée de trajet">
-                                        ⏱️ Plus rapide
-                                    </button>
-                                    <button type="button" class="sort-btn" id="sort-culture" title="Trier par nombre de lieux culturels">
-                                        🏛️ Plus culturel
-                                    </button>
-                                </div>
-                            </div>
-                            <div class="custom-select-container">
-                                <select id="destination-select" class="destination-select">
-                                    <option value="">Sélectionnez une destination...</option>
-                                </select>
-                            </div>
-                        </div>
-
-                        <!-- Active City Overview Card -->
-                        <div class="active-city-banner" id="active-city-banner">
-                            <div class="banner-content">
-                                <div class="city-main-info">
-                                    <h3 class="city-name" id="city-title">Blois</h3>
-                                    <span class="city-station" id="station-title">Gare de Blois - Chambord</span>
-                                </div>
-                                <div class="city-badges-row">
-                                    <span class="badge badge-duration" id="badge-duration">⏱️ 1h26</span>
-                                    <span class="badge badge-culture" id="badge-culture">🏛️ 28 lieux culturels</span>
-                                    <span class="badge badge-cycle" id="badge-cycle">🚲 35 pistes cyclables</span>
-                                    <span class="badge badge-dist" id="badge-dist">📏 170 km</span>
-                                </div>
-                            </div>
-                        </div>
-
-                        <!-- Tab switcher between POIs and Schedules -->
-                        <div class="content-tabs">
-                            <button type="button" class="tab-btn active" id="tab-pois">
-                                <span>🏛️ Points d'intérêt culturels</span>
-                                <span class="tab-count" id="pois-count">0</span>
-                            </button>
-                            <button type="button" class="tab-btn" id="tab-schedules">
-                                <span>🕒 Horaires des trains</span>
-                                <span class="tab-count" id="schedules-count">0</span>
-                            </button>
-                        </div>
+                    <div class="map-toolbar">
+                        <span id="map-route-text" class="route-text">En attente de recherche...</span>
                     </div>
-
-                    <!-- Card 5 Sub-Body: "Point d'intérêt" List -->
-                    <div class="tab-content-container">
-                        <!-- POIs Tab Panel -->
-                        <div class="tab-panel active" id="panel-pois">
-                            <div class="pois-scroll-list" id="pois-list">
-                                <!-- Dynamic POI items -->
-                            </div>
-                        </div>
-
-                        <!-- Schedules Tab Panel -->
-                        <div class="tab-panel hidden" id="panel-schedules">
-                            <div class="schedules-scroll-list" id="schedules-list">
-                                <!-- Dynamic train schedule items -->
-                            </div>
-                        </div>
-                    </div>
-
+                    <div id="leaflet-map" class="leaflet-map-new"></div>
                 </div>
 
-                <!-- CARD 6 (RIGHT): INTERACTIVE LEAFLET MAP ("carte") -->
-                <div class="dash-card card-map" id="card-map">
-                    <div class="map-header-overlay">
-                        <div class="map-info-pill" id="map-info-pill">
-                            <span class="pulse-indicator"></span>
-                            <span id="map-route-text">Trajet : Paris ➔ Destination</span>
-                        </div>
-                        <div class="map-actions">
-                            <button type="button" class="map-action-btn" id="btn-fit-map" title="Recentrer le trajet et la ville" aria-label="Recentrer la carte sur le trajet">
-                                🎯 Recentrer
-                            </button>
-                            <button type="button" class="map-action-btn" id="btn-toggle-pois" title="Afficher/masquer les lieux culturels" aria-label="Afficher ou masquer les lieux culturels sur la carte">
-                                🏛️ Filtrer POIs
-                            </button>
-                        </div>
+            </div>
+
+            <!-- RIGHT COLUMN -->
+            <div class="col-right">
+                
+                <!-- GRAPH comparaison ecologique -->
+                <div class="dash-card card-eco-new" id="card-eco">
+                    <div class="card-header">
+                        <h2 class="card-title">Comparaison écologique (kg CO₂)</h2>
                     </div>
-                    <!-- The Leaflet map element -->
-                    <div id="leaflet-map" class="leaflet-map"></div>
+                    <div class="canvas-container">
+                        <div id="ecoChart" style="width: 100%; height: 100%;"></div>
+                    </div>
                 </div>
 
-            </section>
+                <!-- PROFIL & ALTERNATIVES -->
+                <div class="bottom-split-cards">
+                    <!-- PROFIL DES ACTIVITÉS -->
+                    <div class="dash-card card-radar">
+                        <div class="card-header">
+                            <h2 class="card-title">PROFIL DES ACTIVITÉS (Radar Chart)</h2>
+                        </div>
+                        <div class="canvas-container-radar">
+                            <canvas id="radarChart"></canvas>
+                        </div>
+                    </div>
+
+                    <!-- ALTERNATIVES CALMES PROCHES -->
+                    <div class="dash-card card-alternatives">
+                        <div class="card-header">
+                            <h2 class="card-title">ALTERNATIVES CALMES PROCHES</h2>
+                        </div>
+                        <ul class="alternatives-list" id="alternatives-list">
+                            <!-- Dynamically populated -->
+                            <li class="alt-item empty">Aucune alternative</li>
+                        </ul>
+                    </div>
+                </div>
+
+            </div>
 
         </main>
     </div>
