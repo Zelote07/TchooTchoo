@@ -1,8 +1,12 @@
-import requests
+import os
 from datetime import datetime
 
-# ⚠️ Remplace par ta clé d'API (copiée depuis le site de la SNCF)
-API_KEY = 'c46a208b-8dae-4f8d-9bd2-25693ed88ba9'
+import requests
+from dotenv import load_dotenv
+
+# Clé lue depuis le fichier .env (voir .env.example) — ne jamais la versionner
+load_dotenv()
+API_KEY = os.getenv('SNCF_API_KEY')
 BASE_URL_SNCF = 'https://api.sncf.com/v1/coverage/sncf'
 
 def search_station(query):
@@ -47,8 +51,8 @@ def get_itineraries(departure_id, arrival_id, date_time=None):
         return []
 
 if __name__ == "__main__":
-    if API_KEY == 'TON_TOKEN_API_ICI':
-        print("⚠️  Tu dois configurer la variable API_KEY dans ce script avec ton token de l'API SNCF !")
+    if not API_KEY:
+        print("⚠️  Renseigne SNCF_API_KEY dans le fichier .env (voir .env.example) !")
     else:
         # --- 1. Chercher l'identifiant pour la gare de départ ---
         ville_depart = "Paris"

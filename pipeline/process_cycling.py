@@ -1,3 +1,8 @@
+"""
+Agrège le nombre de segments d'aménagements cyclables par nom de commune -> data/cycle_stats_by_city.json.
+Source : export national des aménagements cyclables (data/france-20261001.geojson, non versionné car volumineux).
+Usage (depuis la racine du dépôt) : python pipeline/process_cycling.py
+"""
 import json
 import pandas as pd
 import os

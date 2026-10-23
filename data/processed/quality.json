@@ -1,0 +1,17 @@
+{
+  "insee_id_mismatch_rate": 0.0375,
+  "n_gares": 2798,
+  "n_lieux_culturels": 86366,
+  "n_lieux_touristiques": 77158,
+  "freq_match_rate": 0.9975,
+  "freq_unmatched": [
+    "Grand-Combe la Pise",
+    "Andorre – l’Hospitalet",
+    "Le Bourget T11",
+    "Donges",
+    "Bellevigny",
+    "Fondettes",
+    "Maison Blanche"
+  ],
+  "gcd_from_commune_rate": 0.9346
+}

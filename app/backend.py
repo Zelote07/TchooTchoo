@@ -1,455 +1,231 @@
-from flask import Flask, request, jsonify, render_template
-import requests
-import altair as alt
-import pandas as pd
-from datetime import datetime
+"""
+TchooTchoo — API Flask de la page "Partez au calme, en train".
 
-app = Flask(__name__, static_folder='static', template_folder='templates')
-
+Les indicateurs proviennent du jeu préparé par pipeline/build_dataset.py.
+L'API SNCF (Navitia) n'est appelée qu'à la demande, pour le trajet réel vers la gare sélectionnée.
+"""
+import io
 import os
-import random
-import json
+from datetime import datetime, timedelta
+
+import pandas as pd
+import requests
 from dotenv import load_dotenv
+from flask import Flask, Response, jsonify, render_template, request
 
-# Charge les variables d'environnement
+import charts
+from scoring import (COMPONENTS, DEFAULT_WEIGHTS, PEPITE_THRESHOLD, Filters, StationStore, clean_record,
+                     co2_comparison)
+
 load_dotenv()
+API_KEY = os.getenv("SNCF_API_KEY")
+SNCF_JOURNEYS_URL = "https://api.sncf.com/v1/coverage/sncf/journeys"
 
-search_cache = {}
+app = Flask(__name__, static_folder="static", template_folder="templates")
+app.json.sort_keys = False
+store = StationStore()
+journey_cache: dict = {}
 
-API_KEY = os.getenv('SNCF_API_KEY')
-if not API_KEY:
-    print("ATTENTION : Aucune clé API trouvée. Avez-vous créé le fichier .env ?")
-BASE_URL_SNCF = 'https://api.sncf.com/v1/coverage/sncf'
+LIST_COLUMNS = ["id_gare", "nom_gare", "commune", "region", "score", "lieux", "remarquables", "voyageurs",
+                "acces_fauteuil", "acces_pmr_partiel", "distance_km", "calme", "culture", "latitude", "longitude"]
+EXPORT_COLUMNS = ["nom_gare", "commune", "region", "gcd_label", "score", "rang_national", "lieux", "remarquables",
+                  "voyageurs", "acces_fauteuil", "distance_km"] + COMPONENTS + ["latitude", "longitude"]
+DETAIL_COLUMNS = ["id_gare", "nom_gare", "commune", "region", "gcd", "gcd_label", "latitude", "longitude", "voyageurs",
+                  "acces_fauteuil", "acces_pmr_partiel", "nb_ascenseurs", "score", "rang_national", "lieux",
+                  "remarquables", "distance_km"] + COMPONENTS
 
-# Chargement de la base de données culturelle au démarrage
-csv_path = os.path.join(os.path.dirname(__file__), '../data/base-des-lieux-et-des-equipements-culturels.csv')
-df_culture = pd.read_csv(csv_path, sep=';', low_memory=False)
+# Préréglages de la démonstration (route /oral) : modifier ici pour changer de scénario.
+DEMO = {
+    "origin": "Marseille Saint-Charles",
+    "max_km": 200,
+    "preset": "equilibre",
+    "compare": ["Théoule-sur-Mer", "Èze"],
+}
 
-# Chargement des stats cyclables
-cycle_path = os.path.join(os.path.dirname(__file__), '../data/cycle_stats_by_city.json')
-cycle_stats = {}
-if os.path.exists(cycle_path):
-    with open(cycle_path, 'r', encoding='utf-8') as f:
-        cycle_stats = json.load(f)
 
-# Nettoyage et calcul des coordonnées par ville
-df_culture['Latitude'] = pd.to_numeric(df_culture['Latitude'].astype(str).str.replace(',', '.'), errors='coerce')
-df_culture['Longitude'] = pd.to_numeric(df_culture['Longitude'].astype(str).str.replace(',', '.'), errors='coerce')
-city_coords = df_culture.groupby('libelle_geographique')[['Latitude', 'Longitude']].mean()
+def theme_arg() -> str:
+    return "dark" if request.args.get("theme") == "dark" else "light"
 
-city_counts = df_culture['libelle_geographique'].value_counts()
-# Villes moyennes avec un potentiel touristique raisonnable (entre 5 et 40 lieux culturels)
-potential_cities = city_counts[(city_counts >= 5) & (city_counts <= 40)].index.tolist()
 
-import math
-import numpy as np
+def is_pepite(df: pd.DataFrame) -> pd.Series:
+    return (df["calme"] >= PEPITE_THRESHOLD) & (df["culture"] >= PEPITE_THRESHOLD)
 
-# Chargement du réseau ferré national pour obtenir les vrais tracés physiques
-lines_db = []
-rail_geojson_path = os.path.join(os.path.dirname(__file__), '../data/reseau_ferre_lignes.geojson')
-if os.path.exists(rail_geojson_path):
-    try:
-        with open(rail_geojson_path, 'r', encoding='utf-8') as f:
-            geo_data = json.load(f)
-        for feat in geo_data.get('features', []):
-            if 'Exploit' in (feat.get('properties', {}).get('libelle') or ''):
-                coords = np.array(feat['geometry']['coordinates'])
-                if len(coords) >= 2:
-                    latlon = coords[:, [1, 0]]
-                    min_lat, min_lon = np.min(latlon, axis=0)
-                    max_lat, max_lon = np.max(latlon, axis=0)
-                    lines_db.append({
-                        'code': feat.get('properties', {}).get('code_ligne'),
-                        'coords': latlon,
-                        'bbox': (min_lat, max_lat, min_lon, max_lon)
-                    })
-        print(f"Réseau Ferré National initialisé ({len(lines_db)} lignes exploitées chargées).")
-    except Exception as e:
-        print(f"Erreur lors du chargement du Réseau Ferré National : {e}")
 
-def get_rail_segment(pt1, pt2):
-    """
-    Extrait le tronçon physique réel des voies ferrées entre deux gares.
-    Si un tronçon ferroviaire direct est trouvé dans le Réseau Ferré National,
-    retourne les coordonnées réelles des rails (avec toutes les courbes).
-    Sinon, retourne la ligne directe [pt1, pt2].
-    """
-    if not lines_db or pt1 is None or pt2 is None:
-        return [pt1, pt2] if (pt1 and pt2) else []
-        
-    p1 = np.array(pt1)
-    p2 = np.array(pt2)
-    best_candidate = None
-    min_dist = 1e9
-    best_indices = None
-    
-    for l in lines_db:
-        min_lat, max_lat, min_lon, max_lon = l['bbox']
-        if not (min(p1[0], p2[0]) - 0.1 <= max_lat and max(p1[0], p2[0]) + 0.1 >= min_lat and
-                min(p1[1], p2[1]) - 0.1 <= max_lon and max(p1[1], p2[1]) + 0.1 >= min_lon):
-            continue
-            
-        coords = l['coords']
-        d1 = np.min(np.sum((coords - p1)**2, axis=1))
-        d2 = np.min(np.sum((coords - p2)**2, axis=1))
-        
-        # Les deux gares doivent être proches de la voie ferrée (< ~5 km)
-        if d1 < 0.003 and d2 < 0.003:
-            comb = d1 + d2
-            if comb < min_dist:
-                min_dist = comb
-                best_candidate = l
-                i1 = np.argmin(np.sum((coords - p1)**2, axis=1))
-                i2 = np.argmin(np.sum((coords - p2)**2, axis=1))
-                best_indices = (i1, i2)
-                
-    if best_candidate and best_indices:
-        coords = best_candidate['coords']
-        i1, i2 = best_indices
-        sliced = coords[i1:i2+1] if i1 <= i2 else coords[i2:i1+1][::-1]
-        # Optimisation : décimation légère si le tronçon compte un très grand nombre de points
-        if len(sliced) > 150:
-            step = 2 if len(sliced) < 500 else 3
-            sliced = np.vstack([sliced[0], sliced[1:-1:step], sliced[-1]])
-        return sliced.tolist()
-        
-    return [pt1, pt2]
-
-def haversine_distance(lat1, lon1, lat2, lon2):
-    R = 6371.0
-    dlat = math.radians(lat2 - lat1)
-    dlon = math.radians(lon2 - lon1)
-    a = math.sin(dlat / 2)**2 + math.cos(math.radians(lat1)) * math.cos(math.radians(lat2)) * math.sin(dlon / 2)**2
-    c = 2 * math.atan2(math.sqrt(a), math.sqrt(1 - a))
-    return R * c
-
-def get_city_pois(city, default_lat=None, default_lon=None, limit=12):
-    try:
-        sub = df_culture[df_culture['libelle_geographique'] == city].dropna(subset=['Nom'])
-        pois = []
-        for _, row in sub.head(limit).iterrows():
-            lat_val = row['Latitude']
-            lon_val = row['Longitude']
-            p_lat = float(lat_val) if (pd.notna(lat_val) and str(lat_val).strip() != '') else default_lat
-            p_lon = float(lon_val) if (pd.notna(lon_val) and str(lon_val).strip() != '') else default_lon
-            
-            nom = str(row['Nom']).replace('\ufffd', 'e')
-            domaine = str(row['Domaine']).replace('\ufffd', 'e') if pd.notna(row['Domaine']) else "Culture"
-            adresse = str(row['Adresse']).replace('\ufffd', 'e') if pd.notna(row['Adresse']) else ""
-            
-            pois.append({
-                "nom": nom,
-                "domaine": domaine,
-                "adresse": adresse,
-                "lat": p_lat,
-                "lon": p_lon
-            })
-        return pois
-    except Exception as e:
-        print(f"Erreur get_city_pois pour {city}: {e}")
-        return []
-
-def search_station(query):
-    url = f"{BASE_URL_SNCF}/places"
-    params = {'q': query}
-    response = requests.get(url, params=params, auth=(API_KEY, ''))
-    if response.status_code == 200:
-        return response.json().get('places', [])
-    return []
-
-def get_coords(place):
-    if not place: return None
-    t = place.get('embedded_type')
-    if t and t in place and 'coord' in place[t]:
-        return float(place[t]['coord']['lat']), float(place[t]['coord']['lon'])
-    return None
-
-@app.route('/')
+@app.route("/")
 def index():
-    return render_template('index.html')
+    return render_template("index.html", demo=None)
 
-@app.route('/api/autocomplete')
-def autocomplete():
-    q = request.args.get('q', '')
-    if len(q) < 2:
-        return jsonify([])
-    places = search_station(q)
-    results = [{"id": p['id'], "name": p['name']} for p in places if 'id' in p][:6]
-    return jsonify(results)
 
-@app.route('/api/search')
-def search():
-    depart = request.args.get('depart')
-    id_depart = request.args.get('id_depart')
-    max_duration = int(request.args.get('max_duration', 600))
-    
-    cache_key = (depart, id_depart, max_duration)
-    if cache_key in search_cache:
-        return jsonify(search_cache[cache_key])
-        
-    places_depart = search_station(depart)
-    
-    if not id_depart:
-        if not places_depart: return jsonify({"error": f"Gare de départ introuvable"}), 404
-        id_depart = places_depart[0]['id']
-        nom_depart = places_depart[0]['name']
-    else:
-        nom_depart = depart
-        
-    dep_coords = get_coords(places_depart[0] if places_depart else None)
-    
-    valid_cities = potential_cities
-    if dep_coords:
-        import numpy as np
-        lat, lon = dep_coords
-        dist_deg = max_duration / 60.0 * 1.5
-        
-        distances = np.sqrt((city_coords['Latitude'] - lat)**2 + (city_coords['Longitude'] - lon)**2)
-        nearby = distances[distances <= dist_deg].index.tolist()
-        valid_cities = list(set(nearby) & set(potential_cities))
-        
-        if len(valid_cities) < 5:
-            nearby = distances[distances <= dist_deg * 2].index.tolist()
-            valid_cities = list(set(nearby) & set(potential_cities))
-            
-    if not valid_cities:
-        valid_cities = potential_cities
-        
-    sample_size = min(len(valid_cities), 30)
-    sampled_cities = random.sample(valid_cities, sample_size)
-    destinations_dict = {}
-    
-    from concurrent.futures import ThreadPoolExecutor, as_completed
+@app.route("/oral")
+def oral():
+    """Même page, avec départ, distance et comparaison préréglés pour la soutenance."""
+    ids = store.df.set_index("nom_gare")["id_gare"]
+    demo = dict(DEMO, compare=[ids[n] for n in DEMO["compare"] if n in ids.index])
+    return render_template("index.html", demo=demo)
 
-    def process_city(city):
-        try:
-            places_arrivee = search_station(city)
-            if not places_arrivee:
-                return None
-                
-            id_arrivee = places_arrivee[0]['id']
-            nom_arrivee = places_arrivee[0]['name']
-            arr_coords = get_coords(places_arrivee[0])
-            
-            url = f"{BASE_URL_SNCF}/journeys"
-            params = {'from': id_depart, 'to': id_arrivee, 'min_nb_journeys': 5}
-            response = requests.get(url, params=params, auth=(API_KEY, ''), timeout=10)
-            
-            journeys = response.json().get('journeys', [])
-            valid_journeys = []
-            
-            for j in journeys:
-                duration_min = j['duration'] // 60
-                if duration_min <= max_duration:
-                    dep_dt = datetime.strptime(j['departure_date_time'], '%Y%m%dT%H%M%S')
-                    arr_dt = datetime.strptime(j['arrival_date_time'], '%Y%m%dT%H%M%S')
-                    co2 = j.get('co2_emission', {}).get('value', 0)
-                    
-                    # Extraction des trains et du tracé géographique
-                    trains = []
-                    geojson_coords = []
-                    for s in j.get('sections', []):
-                        if s.get('type') == 'public_transport':
-                            disp = s.get('display_informations', {})
-                            mode = disp.get('commercial_mode') or disp.get('physical_mode') or 'Train'
-                            num = disp.get('headsign') or disp.get('trip_short_name') or disp.get('code') or ''
-                            direction = disp.get('direction', '')
-                            network = disp.get('network', '')
-                            company = disp.get('company', '')
-                            dep_st = s.get('from', {}).get('name', '')
-                            arr_st = s.get('to', {}).get('name', '')
-                            s_dep_time = ""
-                            s_arr_time = ""
-                            try:
-                                if s.get('departure_date_time'):
-                                    s_dep_time = datetime.strptime(s['departure_date_time'], '%Y%m%dT%H%M%S').strftime('%H:%M')
-                                if s.get('arrival_date_time'):
-                                    s_arr_time = datetime.strptime(s['arrival_date_time'], '%Y%m%dT%H%M%S').strftime('%H:%M')
-                            except Exception:
-                                pass
-                                
-                            trains.append({
-                                "mode": mode,
-                                "numero": num,
-                                "direction": direction,
-                                "network": network,
-                                "company": company,
-                                "from": dep_st,
-                                "to": arr_st,
-                                "dep_time": s_dep_time,
-                                "arr_time": s_arr_time
-                            })
-                            
-                        # Tracé géographique : enrichissement avec les vraies courbes physiques des rails
-                        if s.get('type') == 'public_transport':
-                            stops_geo = s.get('geojson', {}).get('coordinates', [])
-                            if len(stops_geo) >= 2:
-                                for k in range(len(stops_geo) - 1):
-                                    p_a = [stops_geo[k][1], stops_geo[k][0]]
-                                    p_b = [stops_geo[k+1][1], stops_geo[k+1][0]]
-                                    seg = get_rail_segment(p_a, p_b)
-                                    for pt in seg:
-                                        p_rnd = [round(float(pt[0]), 5), round(float(pt[1]), 5)]
-                                        if not geojson_coords or geojson_coords[-1] != p_rnd:
-                                            geojson_coords.append(p_rnd)
-                            elif len(stops_geo) == 1:
-                                p_rnd = [round(float(stops_geo[0][1]), 5), round(float(stops_geo[0][0]), 5)]
-                                if not geojson_coords or geojson_coords[-1] != p_rnd:
-                                    geojson_coords.append(p_rnd)
-                        elif s.get('geojson') and s['geojson'].get('coordinates'):
-                            geo = s['geojson']
-                            gtype = geo.get('type')
-                            coords_to_add = []
-                            if gtype == 'LineString':
-                                coords_to_add = geo['coordinates']
-                            elif gtype == 'MultiLineString':
-                                for line in geo['coordinates']:
-                                    coords_to_add.extend(line)
-                            for pt in coords_to_add:
-                                if len(pt) >= 2:
-                                    p_rnd = [round(float(pt[1]), 5), round(float(pt[0]), 5)]
-                                    if not geojson_coords or geojson_coords[-1] != p_rnd:
-                                        geojson_coords.append(p_rnd)
-                    
-                    valid_journeys.append({
-                        "Départ": dep_dt.strftime('%H:%M'),
-                        "Arrivée": arr_dt.strftime('%H:%M'),
-                        "Durée (min)": duration_min,
-                        "CO2 (g)": co2,
-                        "dep_dt_iso": dep_dt.isoformat(),
-                        "trains": trains,
-                        "geojson_coords": geojson_coords,
-                        "nb_transfers": j.get('nb_transfers', max(0, len(trains) - 1))
-                    })
-            
-            if valid_journeys:
-                valid_journeys.sort(key=lambda x: x["dep_dt_iso"])
-                fastest_journey = min(valid_journeys, key=lambda x: x["Durée (min)"])
-                min_duration = fastest_journey["Durée (min)"]
-                min_co2 = min(j["CO2 (g)"] for j in valid_journeys)
-                
-                # Coordonnées destination
-                dest_lat = arr_coords[0] if arr_coords else None
-                dest_lon = arr_coords[1] if arr_coords else None
-                if dest_lat is None and city in city_coords.index:
-                    dest_lat = float(city_coords.loc[city]['Latitude'])
-                    dest_lon = float(city_coords.loc[city]['Longitude'])
-                
-                # Trains et tracé géographique du meilleur trajet (courbes physiques)
-                best_trains = fastest_journey.get("trains", [])
-                best_coords = fastest_journey.get("geojson_coords", [])
-                if not best_coords and dep_coords and dest_lat is not None and dest_lon is not None:
-                    best_coords = get_rail_segment(dep_coords, [dest_lat, dest_lon])
-                
-                # Distance et calcul CO2 comparatif
-                dist_km = 0
-                if dep_coords and dest_lat is not None and dest_lon is not None:
-                    dist_km = round(haversine_distance(dep_coords[0], dep_coords[1], dest_lat, dest_lon), 1)
-                
-                road_km = round(dist_km * 1.25 if dist_km > 0 else (min_duration / 60.0 * 95), 1)
-                train_kg = round(min_co2 / 1000.0, 2) if min_co2 > 0 else round(max(0.2, dist_km * 0.012), 2)
-                voiture_kg = round(max(1.2, road_km * 0.190), 2)
-                covoit_kg = round(max(0.5, road_km * 0.065), 2)
-                voiture_elec_kg = round(max(0.4, road_km * 0.045), 2)
-                avion_kg = round(max(2.5, (dist_km if dist_km > 0 else road_km) * 0.230), 2)
 
-                saved_kg = round(max(0.1, voiture_kg - train_kg), 1)
-                saved_pct = int(round((1.0 - (train_kg / max(0.1, voiture_kg))) * 100))
-                saved_pct = max(10, min(99, saved_pct))
-                trees_equiv = round(saved_kg / 25.0, 1)
+@app.route("/api/meta")
+def meta():
+    stations = store.df[["id_gare", "nom_gare", "commune", "latitude", "longitude"]].sort_values("nom_gare")
+    return jsonify({
+        "stations": [clean_record(r) for r in stations.round(5).to_dict(orient="records")],
+        "default_weights": DEFAULT_WEIGHTS,
+        "quality": {k: v for k, v in store.quality.items() if k != "freq_unmatched"},
+        "medians": store.medians,
+        "live_journeys": bool(API_KEY),
+    })
 
-                pois = get_city_pois(city, default_lat=dest_lat, default_lon=dest_lon, limit=12)
-                
-                # Récupération de tous les lieux culturels de la ville pour les statistiques du radar chart
-                sub = df_culture[df_culture['libelle_geographique'] == city]
-                types_counts = sub['Type équipement ou lieu'].fillna('Autre').value_counts().to_dict()
-                domaine_counts = sub['Domaine'].fillna('Autre').value_counts().to_dict()
 
-                return {
-                    "nom_arrivee": nom_arrivee,
-                    "data": {
-                        "Gare Destination": nom_arrivee,
-                        "Ville": city,
-                        "Points Culturels": int(city_counts[city]),
-                        "Aménagements Cyclables": cycle_stats.get(city, 0),
-                        "Durée (min)": min_duration,
-                        "CO2 (g)": min_co2,
-                        "coords": [dest_lat, dest_lon] if (dest_lat is not None and dest_lon is not None) else None,
-                        "distance_km": dist_km,
-                        "trains": best_trains,
-                        "geojson_coords": best_coords,
-                        "nb_transfers": fastest_journey.get("nb_transfers", 0),
-                        "co2_comparison": {
-                            "train_kg": train_kg,
-                            "voiture_kg": voiture_kg,
-                            "covoit_kg": covoit_kg,
-                            "voiture_elec_kg": voiture_elec_kg,
-                            "avion_kg": avion_kg,
-                            "saved_kg": saved_kg,
-                            "saved_pct": saved_pct,
-                            "trees_equiv": trees_equiv,
-                            "modes": [
-                                {"mode": "🚆 Train", "co2_kg": train_kg, "color": "#0088ce"},
-                                {"mode": "⚡ Voiture élec.", "co2_kg": voiture_elec_kg, "color": "#10b981"},
-                                {"mode": "👥 Covoiturage", "co2_kg": covoit_kg, "color": "#f59e0b"},
-                                {"mode": "🚘 Voiture thermique", "co2_kg": voiture_kg, "color": "#ef4444"},
-                                {"mode": "✈️ Avion", "co2_kg": avion_kg, "color": "#8b5cf6"}
-                            ]
-                        },
-                        "pois": pois,
-                        "Trajets": valid_journeys,
-                        "types_counts": types_counts,
-                        "domaine_counts": domaine_counts
-                    }
-                }
-        except Exception as e:
-            print(f"Erreur pour la ville {city}: {e}")
-            return None
-        return None
-
-    with ThreadPoolExecutor(max_workers=10) as executor:
-        futures = [executor.submit(process_city, city) for city in sampled_cities]
-        for future in as_completed(futures):
-            res = future.result()
-            if res:
-                destinations_dict[res["nom_arrivee"]] = res["data"]
-            if len(destinations_dict) >= 15:
-                break
-            
-    if not destinations_dict:
-        return jsonify({"error": f"Aucune destination trouvée sous {max_duration} min vers nos villes culturelles. Essayez d'augmenter la durée."}), 404
-        
-    df = pd.DataFrame(list(destinations_dict.values())).sort_values(by="Durée (min)")
-    df['Durée (min)'] = df['Durée (min)'].astype(int)
-    
-    chart = alt.Chart(df).mark_bar(
-        cornerRadiusTopLeft=2, 
-        cornerRadiusTopRight=2,
-        size=35,
-        color='#0088ce'
-    ).encode(
-        x=alt.X('Gare Destination:N', title="Destinations", sort=None, axis=alt.Axis(labelAngle=-45)),
-        y=alt.Y('Durée (min):Q', title="Durée min (minutes)"),
-        tooltip=['Gare Destination', 'Durée (min)', 'Points Culturels', 'Aménagements Cyclables', 'CO2 (g)']
-    ).properties(
-        width='container',
-        height=350
-    ).configure_view(strokeOpacity=0).configure_axis(grid=False)
-    
-    response_data = {
-        "info": {
-            "depart": nom_depart,
-            "dep_coords": dep_coords
+@app.route("/api/dashboard")
+def dashboard():
+    """Résumé, liste des meilleures idées et points de la carte pour les filtres choisis."""
+    f = Filters.from_args(request.args)
+    scored = store.score(f)
+    sel = store.apply_filters(scored, f)
+    pepites = is_pepite(sel)
+    rows = sel[LIST_COLUMNS].assign(pepite=pepites).round({"score": 1, "calme": 0, "culture": 0})
+    return jsonify({
+        "summary": {
+            "n_gares": int(len(sel)),
+            "n_pepites": int(pepites.sum()),
+            "n_fauteuil": int(sel["acces_fauteuil"].sum()),
         },
-        "journeys": df.to_dict(orient="records"),
-        "chart_json": chart.to_dict()
-    }
-    
-    if len(search_cache) > 1000:
-        search_cache.clear()
-    search_cache[cache_key] = response_data
-    
-    return jsonify(response_data)
+        # Quintiles nationaux de la note : classes de couleur de la carte, stables quel que soit le filtre
+        "bins": [round(float(q), 1) for q in scored["score"].quantile([0.2, 0.4, 0.6, 0.8])],
+        "stations": [clean_record(r) for r in rows.to_dict(orient="records")],
+    })
 
-if __name__ == '__main__':
+
+@app.route("/api/station/<path:station_id>")
+def station(station_id):
+    """Fiche destination : chiffres clés, lieux à visiter et graphiques."""
+    if station_id not in store.by_id.index:
+        return jsonify({"error": "Gare inconnue"}), 404
+    f = Filters.from_args(request.args)
+    theme = theme_arg()
+    scored = store.score(f)
+    sel = store.apply_filters(scored, f)
+    row = clean_record(scored.set_index("id_gare").loc[station_id].to_dict())
+    row["id_gare"] = station_id
+    context = sel if station_id in set(sel["id_gare"]) else pd.concat([sel, scored[scored["id_gare"] == station_id]])
+
+    detail = {
+        "station": {k: row.get(k) for k in DETAIL_COLUMNS},
+        "pepite": bool(row["calme"] >= PEPITE_THRESHOLD and row["culture"] >= PEPITE_THRESHOLD),
+        "pois": store.pois.get(station_id, []),
+        "charts": {
+            "composition": charts.composition_chart(row, f.radius, theme),
+            "position": charts.position_chart(context, station_id, theme),
+        },
+        "co2": None,
+    }
+    if row.get("distance_km"):
+        rows = co2_comparison(row["distance_km"])
+        detail["co2"] = rows
+        detail["charts"]["co2"] = charts.co2_chart(rows, theme)
+    return jsonify(detail)
+
+
+@app.route("/api/compare")
+def compare():
+    """Comparaison de deux destinations depuis le même point de départ."""
+    a, b = request.args.get("a"), request.args.get("b")
+    if a not in store.by_id.index or b not in store.by_id.index:
+        return jsonify({"error": "Choisissez deux gares"}), 400
+    f = Filters.from_args(request.args)
+    theme = theme_arg()
+    scored = store.score(f).set_index("id_gare")
+    rows = []
+    for sid in (a, b):
+        row = clean_record(scored.loc[sid].to_dict())
+        row["id_gare"] = sid
+        rows.append(row)
+
+    def side(row):
+        return {
+            "station": {k: row.get(k) for k in DETAIL_COLUMNS} | {
+                "voyageurs_par_an": {y: row.get(f"total_voyageurs_{y}") for y in range(2015, 2025)}},
+            "pepite": bool(row["calme"] >= PEPITE_THRESHOLD and row["culture"] >= PEPITE_THRESHOLD),
+            "pois": store.pois.get(row["id_gare"], [])[:3],
+            "co2": co2_comparison(row["distance_km"]) if row.get("distance_km") else None,
+        }
+
+    return jsonify({
+        "a": side(rows[0]),
+        "b": side(rows[1]),
+        "charts": {
+            "profile": charts.profile_compare(rows, theme),
+            "composition": charts.composition_compare(rows, f.radius, theme),
+            "trend": charts.trend_compare(rows, theme),
+            "co2": charts.co2_compare(rows, theme) if all(r.get("distance_km") for r in rows) else None,
+        },
+    })
+
+
+@app.route("/api/journey")
+def journey():
+    """Trajet réel le plus rapide entre deux gares (API SNCF). Optionnel : nécessite SNCF_API_KEY."""
+    if not API_KEY:
+        return jsonify({"error": "Clé API SNCF absente : temps de trajet réel indisponible."}), 503
+    o, d = request.args.get("from"), request.args.get("to")
+    if o not in store.by_id.index or d not in store.by_id.index:
+        return jsonify({"error": "Gare inconnue"}), 404
+    if (o, d) in journey_cache:
+        return jsonify(journey_cache[(o, d)])
+
+    a, b = store.by_id.loc[o], store.by_id.loc[d]
+    params = {"from": f"{a.longitude};{a.latitude}", "to": f"{b.longitude};{b.latitude}", "min_nb_journeys": 3}
+    # Les petites haltes sont peu desservies : sans solution immédiate, on cherche à partir de demain 7 h
+    tomorrow = (datetime.now() + timedelta(days=1)).replace(hour=7, minute=0, second=0)
+    journeys = []
+    try:
+        for when in (None, tomorrow):
+            if when:
+                params["datetime"] = when.strftime("%Y%m%dT%H%M%S")
+            resp = requests.get(SNCF_JOURNEYS_URL, params=params, auth=(API_KEY, ""), timeout=12)
+            journeys = resp.json().get("journeys", [])
+            if journeys:
+                break
+    except (requests.RequestException, ValueError):
+        return jsonify({"error": "API SNCF injoignable"}), 502
+    if not journeys:
+        return jsonify({"error": "Aucun trajet trouvé aujourd'hui ni demain matin"}), 404
+
+    best = min(journeys, key=lambda j: j["duration"])
+    fmt = lambda s: datetime.strptime(s, "%Y%m%dT%H%M%S").strftime("%H:%M")  # noqa: E731
+    legs = []
+    for s in best.get("sections", []):
+        if s.get("type") != "public_transport":
+            continue
+        info = s.get("display_informations", {})
+        legs.append({
+            "mode": info.get("commercial_mode") or info.get("physical_mode") or "Train",
+            "numero": info.get("headsign") or info.get("trip_short_name") or "",
+            "from": s.get("from", {}).get("name", ""), "to": s.get("to", {}).get("name", ""),
+            "dep": fmt(s["departure_date_time"]), "arr": fmt(s["arrival_date_time"]),
+        })
+    result = {
+        "duration_min": best["duration"] // 60,
+        "nb_transfers": best.get("nb_transfers", max(0, len(legs) - 1)),
+        "co2_kg": round(best.get("co2_emission", {}).get("value", 0) / 1000, 2),
+        "date": datetime.strptime(best["departure_date_time"], "%Y%m%dT%H%M%S").strftime("%d/%m"),
+        "departure": fmt(best["departure_date_time"]),
+        "arrival": fmt(best["arrival_date_time"]),
+        "legs": legs,
+    }
+    journey_cache[(o, d)] = result
+    return jsonify(result)
+
+
+@app.route("/api/export.csv")
+def export_csv():
+    f = Filters.from_args(request.args)
+    sel = store.apply_filters(store.score(f), f)
+    buf = io.StringIO()
+    sel[EXPORT_COLUMNS].round(2).to_csv(buf, index=False, sep=";")
+    return Response("﻿" + buf.getvalue(), mimetype="text/csv",
+                    headers={"Content-Disposition": "attachment; filename=tchootchoo_gares.csv"})
+
+
+if __name__ == "__main__":
     app.run(debug=True, port=5000)

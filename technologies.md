@@ -1,50 +1,43 @@
-# Stack Technique : Points Forts et Défauts
+# Stack technique : points forts et défauts
 
-Ce document analyse les technologies choisies pour le développement de l'application **TchooTchoo**, en détaillant leurs avantages et leurs limites.
+Ce document argumente les technologies retenues pour **TchooTchoo** (voir aussi la section « Choix de conception » du README).
 
-## 🎨 Frontend (Interface Utilisateur)
+## Préparation des données — Pandas + NumPy (`pipeline/`)
+* **Points forts**
+  * Pipeline reproductible, exécuté une fois (≈ 30 s) : le dashboard lit des données préparées et ne dépend plus d'appels API aléatoires.
+  * Calcul spatial vectorisé (haversine par blocs) : 2 798 gares × 77 158 lieux sans dépendance géospatiale lourde.
+* **Défauts**
+  * Tout est chargé en mémoire. C'est adapté à ces volumes (≈ 50 Mo), pas à un entrepôt de données.
+  * Sans index spatial (BallTree, PostGIS), le calcul passerait mal à l'échelle européenne.
 
-### 1. HTML5, CSS3, JavaScript (Vanilla ES6)
-* **Points Forts :**
-  * **Légèreté et vitesse** : Aucune dépendance lourde, pas de processus de compilation complexe (pas besoin de Node.js, Webpack, etc.). Le chargement dans le navigateur est immédiat.
-  * **Contrôle total** : L'accès direct au DOM permet de gérer très finement les animations et les interactions sans la surcouche d'un framework.
-* **Défauts :**
-  * **Maintenabilité** : La gestion manuelle du DOM et de l'état (state) peut rendre le fichier `app.js` verbeux et difficile à faire évoluer si l'application devient très complexe.
-  * **Manque de composants** : L'absence de frameworks comme React ou Vue.js oblige à dupliquer parfois du code HTML ou à le générer manuellement via JavaScript.
+## API — Flask
+* **Points forts**
+  * Micro-framework minimal : quatre routes (`/api/dashboard`, `/api/station`, `/api/journey`, `/api/export.csv`).
+  * Contrôle total du layout HTML/CSS, contrairement à Streamlit.
+* **Défauts**
+  * Synchrone : un appel lent à l'API SNCF bloque un worker. Le cache en mémoire atténue le problème.
+  * Le serveur de développement n'est pas fait pour la production : il faudrait gunicorn ou waitress.
 
-### 2. Leaflet.js (Cartographie Interactive)
-* **Points Forts :**
-  * **Open Source et Indépendant** : Parfaitement compatible avec des fonds de carte gratuits comme OpenStreetMap. Ne nécessite aucune clé d'API, ce qui garantit la pérennité du projet.
-  * **Léger et Mobile-Friendly** : Conçu dès le départ pour la performance et les interactions tactiles sur smartphone.
-* **Défauts :**
-  * **Limites 3D et vectorielles** : Contrairement à Mapbox GL JS, Leaflet n'est pas nativement conçu pour le rendu WebGL complexe (comme la 3D, les bâtiments extrudés ou l'inclinaison de la caméra).
-  * **Performances sur gros volumes** : Afficher des milliers de points (POIs) simultanément peut ralentir le navigateur sans utiliser de plugin de *clustering*.
+## Visualisation — Altair → Vega-Lite (vega-embed)
+* **Points forts**
+  * Grammaire des graphiques déclarative, vue en cours. Les specs sont produites en Python, au plus près des données.
+  * Graphiques en `width/height: container` : ils remplissent exactement leur zone, condition du « zéro défilement ».
+  * Thème clair/sombre centralisé (`charts.theme_config`) et descriptions ARIA intégrées aux specs.
+* **Défauts**
+  * Specs JSON embarquant leurs données (≈ 170 Ko par fiche) : il faudrait passer par des URL de données en production.
+  * Un graphique placé dans un onglet masqué n'a pas de taille : il faut l'afficher au moment où l'onglet s'ouvre.
 
----
+## Cartographie — Leaflet
+* **Points forts**
+  * Léger, sans clé d'API, rendu canvas performant pour environ 2 800 points.
+  * Fonds gris neutres (Esri Canvas) : la couleur reste réservée aux données.
+* **Défauts**
+  * Navigation clavier limitée sur les marqueurs ; la liste des idées compense.
+  * Pas de rendu vectoriel WebGL (contrairement à MapLibre).
 
-## ⚙️ Backend (Serveur & Traitement des Données)
-
-### 3. Python avec Flask
-* **Points Forts :**
-  * **Simplicité et rapidité de développement** : Micro-framework minimaliste, idéal pour monter une API REST en quelques lignes de code.
-  * **Flexibilité** : Ne force aucune architecture spécifique, s'adaptant parfaitement à la taille de notre projet.
-  * **Pont avec la Data** : Étant en Python, il s'intègre nativement et parfaitement avec notre stack de traitement de données (Pandas).
-* **Défauts :**
-  * **Gestion de la concurrence** : Flask est synchrone par défaut. Il est moins performant que FastAPI ou Node.js pour gérer un très grand nombre de requêtes simultanées.
-  * **Structure libre** : Cette liberté peut devenir un piège architectural si le projet grossit considérablement sans règles strictes de séparation du code.
-
-### 4. Pandas (Analyse et traitement de données)
-* **Points Forts :**
-  * **Puissance d'analyse** : L'outil standard de l'industrie pour nettoyer, croiser et agréger nos datasets (gares, lieux culturels, bilans carbone).
-  * **Expressivité** : Des manipulations complexes de données se font en quelques lignes hautement optimisées (en C sous le capot).
-* **Défauts :**
-  * **Gourmand en RAM** : Pandas charge l'intégralité du jeu de données en mémoire vive. Ce n'est pas un problème pour nos fichiers actuels, mais cela le deviendrait face à des bases de données massives (Big Data).
-  * **Latence** : Les calculs "à la volée" via Pandas sur le serveur à chaque requête utilisateur peuvent ajouter un délai par rapport à des requêtes SQL classiques pré-indexées.
-
-### 5. Requests & Altair
-* **Points Forts :**
-  * **Requests** : Syntaxe extrêmement claire et humaine pour effectuer les appels vers l'API de la SNCF.
-  * **Altair** : Syntaxe déclarative élégante pour générer des visualisations (graphiques) basées sur la norme open-source Vega-Lite.
-* **Défauts :**
-  * **Requests** : Appels HTTP bloquants. Si l'API SNCF met 2 secondes à répondre, le serveur Flask reste bloqué 2 secondes sur cette requête.
-  * **Altair** : L'intégration web nécessite souvent de charger des librairies front-end supplémentaires (Vega) pour faire le rendu des graphiques exportés en JSON.
+## Données temps réel — API SNCF (Navitia) via Requests
+* **Points forts**
+  * Temps de trajet, correspondances et CO₂ réels vers la gare choisie, appelés à la demande uniquement.
+* **Défauts**
+  * Nécessite une clé (fichier `.env`, jamais versionné) ; sans clé, le bloc affiche un message explicite.
+  * Les petites haltes sont peu desservies : sans solution immédiate, on relance la recherche pour le lendemain à 7 h.

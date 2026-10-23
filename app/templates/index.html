@@ -3,140 +3,231 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Dashboard Tourisme Discret en France</title>
-    <!-- Google Fonts -->
+    <title>TchooTchoo — Partez au calme, en train</title>
+    <meta name="description" content="Trouvez et comparez des destinations calmes et riches en culture, accessibles en train.">
+    <script>
+        // Thème appliqué avant le rendu pour éviter un flash clair/sombre
+        try {
+            const saved = localStorage.getItem('tchoo-theme');
+            if (saved) document.documentElement.dataset.theme = saved;
+        } catch (e) { /* stockage indisponible : on suit le système */ }
+        window.TCHOO_DEMO = {{ demo | tojson }};
+    </script>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
-    
-    <!-- Leaflet CSS -->
-    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="" />
-    
-    <!-- Chart.js -->
-    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-
-    <!-- Custom CSS -->
+    <link href="https://fonts.googleapis.com/css2?family=Source+Sans+3:wght@400;600;700&family=Source+Serif+4:opsz,wght@8..60,600&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="">
     <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
-    <script src="https://cdn.plot.ly/plotly-2.27.0.min.js" charset="utf-8"></script>
 </head>
 <body>
-    <div class="dashboard-wrapper">
-        <!-- Top App Navigation Bar -->
-        <header class="app-header custom-red-header">
-            <h1 class="main-title">Titre : Dashboard Tourisme Discret en France</h1>
-        </header>
+<a class="skip-link" href="#main">Aller au contenu</a>
 
-        <!-- Main Dashboard Content Grid -->
-        <main class="dashboard-grid-new">
-            
-            <!-- LEFT COLUMN -->
-            <div class="col-left">
-                
-                <!-- Filtre Ville + Durée -->
-                <div class="dash-card card-search" id="card-search">
-                    <div class="card-header">
-                        <h2 class="card-title">Filtre Ville + Durée</h2>
-                    </div>
-                    <form id="search-form" class="search-form" autocomplete="off">
-                        <div class="form-inputs-row">
-                            <div class="form-group autocomplete-group">
-                                <label for="depart">Gare de départ</label>
-                                <div class="input-with-icon">
-                                    <span class="input-icon">📍</span>
-                                    <input type="text" id="depart" placeholder="Ex: Paris..." required autocomplete="off" value="Paris">
-                                    <input type="hidden" id="id_depart">
-                                </div>
-                                <ul class="autocomplete-list" id="depart-list"></ul>
-                            </div>
-                            <div class="form-group duration-group">
-                                <div class="duration-label-row">
-                                    <label for="max_duration">Durée max :</label>
-                                    <span class="duration-display" id="duration-display">3h00 (180 min)</span>
-                                </div>
-                                <div class="duration-slider-container">
-                                    <input type="range" id="max_duration" min="30" max="480" step="15" value="180">
-                                </div>
-                            </div>
-                            <div class="form-submit-group">
-                                <button type="submit" id="submit-btn" class="btn-primary">
-                                    <span class="btn-spinner hidden" id="search-spinner"></span>
-                                    <span class="btn-text">Rechercher</span>
-                                </button>
-                            </div>
-                        </div>
-                    </form>
-                </div>
-
-                <!-- Carte (Interactions & Sélection) -->
-                <div class="dash-card card-map-new" id="card-map">
-                    <div class="card-header" style="padding-bottom: 0.5rem;">
-                        <h2 class="card-title">Carte des destinations</h2>
-                    </div>
-                    <div class="map-toolbar">
-                        <span id="map-route-text" class="route-text">En attente de recherche...</span>
-                    </div>
-
-                    <!-- Bandeau Train Sélectionné -->
-                    <div id="train-detail-card" class="train-detail-card hidden">
-                        <div class="train-detail-row">
-                            <div class="train-badges-group" id="train-badges-group"></div>
-                            <div class="train-summary-times" id="train-summary-times"></div>
-                            <div class="train-transfers-info" id="train-transfers-info"></div>
-                        </div>
-                        <div id="train-steps-breakdown" class="train-steps-breakdown"></div>
-                    </div>
-
-                    <div id="leaflet-map" class="leaflet-map-new"></div>
-                </div>
-
-            </div>
-
-            <!-- RIGHT COLUMN -->
-            <div class="col-right">
-                
-                <!-- GRAPH comparaison ecologique -->
-                <div class="dash-card card-eco-new" id="card-eco">
-                    <div class="card-header">
-                        <h2 class="card-title">Comparaison écologique (kg CO₂)</h2>
-                    </div>
-                    <div class="canvas-container">
-                        <div id="ecoChart" style="width: 100%; height: 100%;"></div>
-                    </div>
-                </div>
-
-                <!-- PROFIL & ALTERNATIVES -->
-                <div class="bottom-split-cards">
-                    <!-- PROFIL DES ACTIVITÉS -->
-                    <div class="dash-card card-radar">
-                        <div class="card-header">
-                            <h2 class="card-title">PROFIL DES ACTIVITÉS (Radar Chart)</h2>
-                        </div>
-                        <div class="canvas-container-radar">
-                            <canvas id="radarChart"></canvas>
-                        </div>
-                    </div>
-
-                    <!-- ALTERNATIVES CALMES PROCHES -->
-                    <div class="dash-card card-alternatives">
-                        <div class="card-header">
-                            <h2 class="card-title">ALTERNATIVES CALMES PROCHES</h2>
-                        </div>
-                        <ul class="alternatives-list" id="alternatives-list">
-                            <!-- Dynamically populated -->
-                            <li class="alt-item empty">Aucune alternative</li>
-                        </ul>
-                    </div>
-                </div>
-
-            </div>
-
-        </main>
+<!-- ================= EN-TÊTE ================= -->
+<header class="masthead">
+    <div class="brand">
+        <p class="wordmark">TchooTchoo</p>
+        <h1 class="tagline">Des destinations calmes et riches en culture, accessibles en train</h1>
     </div>
+    <nav class="views" role="tablist" aria-label="Choisir la vue">
+        <button type="button" role="tab" id="view-tab-explore" aria-controls="view-explore" aria-selected="true">Explorer</button>
+        <button type="button" role="tab" id="view-tab-compare" aria-controls="view-compare" aria-selected="false" tabindex="-1">
+            Comparer <span class="compare-count" id="compare-count"></span>
+        </button>
+    </nav>
+    <div class="masthead-actions">
+        <p class="demo-flag" id="demo-flag" hidden>Démo · départ <strong id="demo-origin"></strong> · <a href="/">quitter</a></p>
+        <button type="button" class="btn-text" id="guide-btn" aria-haspopup="dialog">Comment ça marche&nbsp;?</button>
+        <button type="button" class="btn-icon" id="theme-btn" aria-label="Passer en thème sombre ou clair">
+            <svg viewBox="0 0 24 24" width="17" height="17" aria-hidden="true"><path fill="currentColor" d="M12 3a9 9 0 1 0 9 9c0-.46-.04-.92-.1-1.36a5.39 5.39 0 0 1-4.4 2.26 5.4 5.4 0 0 1-3.14-9.8c-.44-.06-.9-.1-1.36-.1z"/></svg>
+        </button>
+    </div>
+</header>
 
-    <!-- Leaflet JS -->
-    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
-    
-    <!-- App Logic -->
-    <script src="{{ url_for('static', filename='app.js') }}"></script>
+<!-- ================= RECHERCHE (commune aux deux vues) ================= -->
+<form class="search" id="search-form" autocomplete="off" role="search" aria-label="Rechercher une destination">
+    <div class="field field-origin">
+        <label for="origin">Je pars de</label>
+        <input type="text" id="origin" list="origin-list" placeholder="Nom de ma gare (facultatif)">
+        <datalist id="origin-list"></datalist>
+    </div>
+    <div class="field field-distance">
+        <label for="max_km">Jusqu'à</label>
+        <select id="max_km" disabled aria-describedby="max-km-help">
+            <option value="0">Toute la France</option>
+            <option value="100">100 km</option>
+            <option value="200">200 km</option>
+            <option value="300" selected>300 km</option>
+            <option value="500">500 km</option>
+        </select>
+        <span id="max-km-help" class="sr-only">Distance à vol d'oiseau depuis la gare de départ. Choisissez d'abord une gare de départ.</span>
+    </div>
+    <fieldset class="field field-wishes">
+        <legend>Mes envies</legend>
+        <div class="segmented">
+            <label><input type="radio" name="preset" value="equilibre" checked><span>Un peu de tout</span></label>
+            <label><input type="radio" name="preset" value="culture"><span>Culture d'abord</span></label>
+            <label><input type="radio" name="preset" value="calme"><span>Calme absolu</span></label>
+            <label><input type="radio" name="preset" value="acces"><span>Facile d'accès</span></label>
+        </div>
+    </fieldset>
+    <div class="field field-options">
+        <label class="check"><input type="checkbox" id="pmr_only"> Gare accessible PMR</label>
+        <label class="check"><input type="checkbox" id="small_towns"> Inclure les petites villes</label>
+    </div>
+</form>
+
+<main id="main" tabindex="-1">
+<!-- ================= VUE EXPLORER ================= -->
+<div class="view board" id="view-explore" role="tabpanel" aria-labelledby="view-tab-explore">
+    <section class="panel ideas" aria-labelledby="ideas-title">
+        <header class="panel-head">
+            <h2 id="ideas-title">Nos idées de destinations</h2>
+            <p class="summary" id="summary" aria-live="polite">Chargement…</p>
+        </header>
+        <ol class="idea-list" id="idea-list" aria-label="Destinations classées par note"></ol>
+        <nav class="pager" aria-label="Pages de résultats">
+            <button type="button" class="pager-btn" id="prev-page" aria-label="Destinations précédentes">‹</button>
+            <span id="page-info" aria-live="polite"></span>
+            <button type="button" class="pager-btn" id="next-page" aria-label="Destinations suivantes">›</button>
+        </nav>
+    </section>
+
+    <section class="panel map-panel" aria-labelledby="map-title">
+        <h2 id="map-title" class="sr-only">Carte des destinations</h2>
+        <div id="map" class="map" role="region" aria-label="Carte des destinations proposées. Utilisez la liste pour naviguer au clavier."></div>
+    </section>
+
+    <section class="panel destination" aria-labelledby="dest-name" aria-live="polite">
+        <header class="dest-head">
+            <div class="dest-title">
+                <p class="dest-badges" id="dest-badges"></p>
+                <h2 id="dest-name">Choisissez une destination</h2>
+                <p class="dest-place" id="dest-place"></p>
+            </div>
+            <p class="note" id="dest-note"><span class="note-value">–</span><span class="note-max">/10</span></p>
+        </header>
+        <div class="dest-actions">
+            <button type="button" class="btn-outline" id="add-compare">Ajouter à la comparaison</button>
+            <span class="add-feedback" id="add-feedback" aria-live="polite"></span>
+        </div>
+
+        <div class="tabs" role="tablist" aria-label="Informations sur la destination">
+            <button type="button" role="tab" id="tab-visit" aria-controls="panel-visit" aria-selected="true">À visiter</button>
+            <button type="button" role="tab" id="tab-why" aria-controls="panel-why" aria-selected="false" tabindex="-1">Pourquoi ici&nbsp;?</button>
+            <button type="button" role="tab" id="tab-place" aria-controls="panel-place" aria-selected="false" tabindex="-1">Situer</button>
+            <button type="button" role="tab" id="tab-go" aria-controls="panel-go" aria-selected="false" tabindex="-1">Y aller</button>
+        </div>
+
+        <div class="tab-panel" role="tabpanel" id="panel-visit" aria-labelledby="tab-visit">
+            <h3 class="block-title" id="visit-title">Lieux à moins de 10 km de la gare</h3>
+            <div class="chart chart-compo" id="chart-composition"></div>
+            <h3 class="block-title">À ne pas manquer</h3>
+            <ul class="poi-list" id="poi-list"></ul>
+        </div>
+        <div class="tab-panel" role="tabpanel" id="panel-why" aria-labelledby="tab-why" hidden>
+            <h3 class="block-title">Chaque critère noté sur 10</h3>
+            <ul class="reasons" id="reasons"></ul>
+        </div>
+        <div class="tab-panel" role="tabpanel" id="panel-place" aria-labelledby="tab-place" hidden>
+            <h3 class="block-title">Cette gare parmi les autres idées</h3>
+            <p class="block-sub">Chaque point gris est une autre idée. Plus à droite = plus calme, plus en haut = plus de culture.</p>
+            <div class="chart chart-fill" id="chart-position"></div>
+        </div>
+        <div class="tab-panel" role="tabpanel" id="panel-go" aria-labelledby="tab-go" hidden>
+            <div id="trip"></div>
+            <h3 class="block-title" id="co2-title" hidden>Empreinte carbone d'un aller simple</h3>
+            <div class="chart chart-fill" id="chart-co2"></div>
+            <p class="co2-note" id="co2-note"></p>
+        </div>
+    </section>
+</div>
+
+<!-- ================= VUE COMPARER ================= -->
+<div class="view compare" id="view-compare" role="tabpanel" aria-labelledby="view-tab-compare" hidden>
+    <header class="compare-bar">
+        <p class="compare-from" id="compare-from">Sans gare de départ</p>
+        <div class="pickers">
+            <label class="picker picker-a"><span class="key key-a" aria-hidden="true">A</span><span class="sr-only">Destination A</span>
+                <select id="pick-a"></select></label>
+            <button type="button" class="btn-icon" id="swap" aria-label="Inverser A et B">⇄</button>
+            <label class="picker picker-b"><span class="key key-b" aria-hidden="true">B</span><span class="sr-only">Destination B</span>
+                <select id="pick-b"></select></label>
+        </div>
+        <p class="verdict" id="verdict" aria-live="polite"></p>
+    </header>
+
+    <div class="compare-grid">
+        <section class="panel cpanel" aria-labelledby="c-map-title">
+            <h2 class="cpanel-title" id="c-map-title">Où sont-elles&nbsp;?</h2>
+            <div id="map-compare" class="map" role="img" aria-label="Carte du départ et des deux destinations"></div>
+        </section>
+        <section class="panel cpanel" aria-labelledby="c-profile-title">
+            <h2 class="cpanel-title" id="c-profile-title">Les notes, critère par critère</h2>
+            <div class="chart chart-fill" id="chart-c-profile"></div>
+        </section>
+        <section class="panel cpanel" aria-labelledby="c-compo-title">
+            <h2 class="cpanel-title" id="c-compo-title">Lieux à visiter à moins de 10 km</h2>
+            <div class="chart chart-fill" id="chart-c-composition"></div>
+        </section>
+        <section class="panel cpanel" aria-labelledby="c-trip-title">
+            <h2 class="cpanel-title" id="c-trip-title">Le voyage</h2>
+            <table class="trip-table" id="trip-table"><caption class="sr-only">Comparaison du trajet vers A et B</caption></table>
+        </section>
+        <section class="panel cpanel" aria-labelledby="c-co2-title">
+            <h2 class="cpanel-title" id="c-co2-title">CO₂ d'un aller simple</h2>
+            <div class="chart chart-fill" id="chart-c-co2"></div>
+        </section>
+        <section class="panel cpanel" aria-labelledby="c-trend-title">
+            <h2 class="cpanel-title" id="c-trend-title">Voyageurs par jour en gare, 2015-2024</h2>
+            <div class="chart chart-fill" id="chart-c-trend"></div>
+        </section>
+    </div>
+</div>
+</main>
+
+<!-- ================= GUIDE ================= -->
+<dialog id="guide" aria-labelledby="guide-title">
+    <div class="guide-head">
+        <h2 id="guide-title">Comment ça marche&nbsp;?</h2>
+        <button type="button" class="btn-icon" id="guide-close" aria-label="Fermer le guide">✕</button>
+    </div>
+    <div class="guide-body">
+        <section>
+            <h3>La note sur 10</h3>
+            <p>Elle combine quatre critères : la <strong>culture</strong> à visiter autour de la gare, le <strong>calme</strong> (peu de voyageurs),
+                la <strong>campagne</strong> (commune peu peuplée) et l'<strong>accès</strong> pour les personnes à mobilité réduite.
+                « Mes envies » change l'importance de chaque critère.</p>
+        </section>
+        <section>
+            <h3>Une pépite</h3>
+            <p>Une gare plus calme <em>et</em> plus riche en culture que la moitié des gares de France.</p>
+        </section>
+        <section>
+            <h3>Explorer</h3>
+            <p>La liste classe les idées, la carte les situe (bleu foncé = meilleure note), la fiche détaille la destination choisie en quatre onglets.</p>
+        </section>
+        <section>
+            <h3>Comparer</h3>
+            <p>Ajoutez deux gares depuis leur fiche (ou choisissez-les en haut de la vue Comparer). Elles apparaissent côte à côte :
+                <span class="key key-a">A</span> en bleu, <span class="key key-b">B</span> en orange.</p>
+        </section>
+        <section>
+            <h3>Y aller</h3>
+            <p>Avec une gare de départ : distance, prochain train réel et CO₂ par mode, calculé avec la distance × 1,2 et les chiffres moyens de l'ADEME.</p>
+        </section>
+        <section>
+            <h3>Les données</h3>
+            <p>Ministère de la Culture (86&nbsp;366 lieux), SNCF (2&nbsp;798 gares, fréquentation, accessibilité), INSEE, ADEME.
+                Vérifiez horaires et ouvertures avant de partir.
+                <a href="https://github.com/Zelote07/TchooTchoo/blob/main/docs/documentation.md" target="_blank" rel="noopener">Documentation complète</a>.</p>
+        </section>
+    </div>
+</dialog>
+
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
+<script src="https://cdn.jsdelivr.net/npm/vega@6.4.0"></script>
+<script src="https://cdn.jsdelivr.net/npm/vega-lite@6.4.1"></script>
+<script src="https://cdn.jsdelivr.net/npm/vega-embed@7.1.0"></script>
+<script src="{{ url_for('static', filename='app.js') }}"></script>
 </body>
 </html>
