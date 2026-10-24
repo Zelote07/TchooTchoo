@@ -175,9 +175,15 @@ def profile_compare(rows: list[dict], theme: str) -> dict:
     labels.loc[tie, "label"] = labels.loc[tie, "label"] + " (A = B)"
 
     order = wide["critere"].tolist()
-    scale = alt.Scale(domain=[-1.2, 11.2])
+    scale = alt.Scale(domain=[-1.2, 12])
+    # À côté de chaque critère, d'où vient la valeur
+    origin = {"Note globale": "vos envies", "Culture": "lieux à 10 km", "Calme": "voyageurs SNCF",
+              "Campagne": "densité INSEE", "Accès": "fauteuil, PMR"}
+    label_expr = "datum.value + ' · ' + (" + " : ".join(
+        f"datum.value === '{k}' ? '{v}'" for k, v in origin.items()) + " : '')"
     y = alt.Y("critere:N", sort=order, title=None,
-              axis=alt.Axis(ticks=False, domain=False, labelPadding=10, labelFontWeight=600))
+              axis=alt.Axis(ticks=False, domain=False, labelPadding=10, labelFontWeight=600,
+                            labelExpr=label_expr))
     x = alt.X("v:Q", title=None, scale=scale,
               axis=alt.Axis(values=[0, 5, 10], grid=True, labelExpr="datum.value + '/10'"))
     link = alt.Chart(wide).mark_rule(color=t["neutral"], strokeWidth=3).encode(

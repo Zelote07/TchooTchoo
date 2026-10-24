@@ -14,6 +14,7 @@ const PRESETS = {
     calme: { culture: 20, calme: 60, ruralite: 15, accessibilite: 5 },
     acces: { culture: 30, calme: 20, ruralite: 10, accessibilite: 40 },
 };
+const CRITERIA_LABEL = { culture: 'Culture', calme: 'Calme', ruralite: 'Campagne', accessibilite: 'Accès' };
 const RURAL_GCD = [5, 6, 7];
 const WITH_SMALL_TOWNS_GCD = [3, 4, 5, 6, 7];
 const GCD_PLAIN = {
@@ -285,7 +286,15 @@ function searchParams() {
     p.set('radius', RADIUS_KM);
     const preset = PRESETS[document.querySelector('input[name="preset"]:checked').value];
     Object.entries(preset).forEach(([k, v]) => p.set(`w_${k}`, v));
+    showWeights(preset);
     return p;
+}
+
+// Rappelle les poids de l'envie choisie dans les notes de calcul.
+function showWeights(preset) {
+    const text = Object.entries(CRITERIA_LABEL)
+        .map(([k, label]) => `${preset[k]} % ${label}`).join(', ');
+    document.querySelectorAll('[data-weights]').forEach((el) => { el.textContent = text; });
 }
 
 async function refresh() {
@@ -568,7 +577,7 @@ function calmText(voyageurs) {
     const ratio = state.meta.medians.voyageurs / Math.max(1, voyageurs);
     const comparison = ratio >= 2 ? `, ${nf.format(Math.round(ratio))} fois moins qu'une gare typique`
         : ratio >= 1 ? ', un peu moins qu\'une gare typique' : ', plus qu\'une gare typique';
-    return `${nf.format(Math.round(voyageurs))} voyageurs par an en gare${comparison}.`;
+    return `${nf.format(Math.round(voyageurs))} voyageurs par an${comparison}.`;
 }
 
 function reasons(s) {
@@ -576,7 +585,7 @@ function reasons(s) {
         : s.acces_pmr_partiel ? 'Accès partiel pour les personnes à mobilité réduite.'
             : 'Gare sans équipement pour les fauteuils roulants.';
     return [
-        { label: 'Culture', value: s.culture, text: `${nf.format(s.lieux)} lieux à moins de ${RADIUS_KM} km, dont ${nf.format(s.remarquables)} labellisés (Unesco, Musée de France…).` },
+        { label: 'Culture', value: s.culture, text: `${nf.format(s.lieux)} lieux à moins de ${RADIUS_KM} km, dont ${nf.format(s.remarquables)} labellisés (Unesco…).` },
         { label: 'Calme', value: s.calme, text: calmText(s.voyageurs) },
         { label: 'Campagne', value: s.ruralite, text: `Commune de type « ${GCD_PLAIN[s.gcd] || 'inconnu'} » selon l'INSEE.` },
         { label: 'Accès', value: s.accessibilite, text: access },
@@ -588,6 +597,7 @@ function renderTrip(s) {
     const origin = originId();
     const co2 = state.detail.co2;
     document.getElementById('co2-title').hidden = !co2;
+    document.getElementById('co2-calc').hidden = !co2;
     document.getElementById('co2-note').textContent = '';
     if (!origin) {
         trip.innerHTML = `<div class="trip-empty">

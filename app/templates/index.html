@@ -121,23 +121,27 @@
         <div class="tab-panel" role="tabpanel" id="panel-visit" aria-labelledby="tab-visit">
             <h3 class="block-title" id="visit-title">Lieux à moins de 10 km de la gare</h3>
             <div class="chart chart-compo" id="chart-composition"></div>
+            <p class="calc"><b>Calcul&nbsp;:</b> nombre de lieux culturels recensés par le ministère de la Culture à moins de 10&nbsp;km à vol d'oiseau de la gare, regroupés en 4 familles.</p>
             <h3 class="block-title">À ne pas manquer</h3>
             <ul class="poi-list" id="poi-list"></ul>
         </div>
         <div class="tab-panel" role="tabpanel" id="panel-why" aria-labelledby="tab-why" hidden>
-            <h3 class="block-title">Chaque critère noté sur 10</h3>
+            <h3 class="sr-only">Chaque critère noté sur 10</h3>
             <ul class="reasons" id="reasons"></ul>
+            <p class="calc"><b>Calcul&nbsp;:</b> données ministère de la Culture, SNCF et INSEE&nbsp;; chaque critère est classé parmi les 2&nbsp;798 gares, ramené sur 10. Note&nbsp;= <span data-weights>40&nbsp;% Culture, 30&nbsp;% Calme, 20&nbsp;% Campagne, 10&nbsp;% Accès</span>.</p>
         </div>
         <div class="tab-panel" role="tabpanel" id="panel-place" aria-labelledby="tab-place" hidden>
             <h3 class="block-title">Cette gare parmi les autres idées</h3>
             <p class="block-sub">Chaque point gris est une autre idée. Plus à droite = plus calme, plus en haut = plus de culture.</p>
             <div class="chart chart-fill" id="chart-position"></div>
+            <p class="calc"><b>Calcul&nbsp;:</b> chaque axe est un rang sur 100 parmi les 2&nbsp;798 gares de France (50 = gare médiane). Pépite = calme ≥ 50 et culture ≥ 50.</p>
         </div>
         <div class="tab-panel" role="tabpanel" id="panel-go" aria-labelledby="tab-go" hidden>
             <div id="trip"></div>
             <h3 class="block-title" id="co2-title" hidden>Empreinte carbone d'un aller simple</h3>
             <div class="chart chart-fill" id="chart-co2"></div>
             <p class="co2-note" id="co2-note"></p>
+            <p class="calc" id="co2-calc" hidden><b>Calcul&nbsp;:</b> distance à vol d'oiseau × 1,2 (détours des voies et des routes) × émissions du mode par voyageur et par km (ADEME, fabrication incluse).</p>
         </div>
     </section>
 </div>
@@ -164,10 +168,12 @@
         <section class="panel cpanel" aria-labelledby="c-profile-title">
             <h2 class="cpanel-title" id="c-profile-title">Les notes, critère par critère</h2>
             <div class="chart chart-fill" id="chart-c-profile"></div>
+            <p class="calc"><b>Calcul&nbsp;:</b> chaque critère est classé parmi les 2&nbsp;798 gares, sur 10. Note&nbsp;= <span data-weights>40&nbsp;% Culture, 30&nbsp;% Calme, 20&nbsp;% Campagne, 10&nbsp;% Accès</span>.</p>
         </section>
         <section class="panel cpanel" aria-labelledby="c-compo-title">
             <h2 class="cpanel-title" id="c-compo-title">Lieux à visiter à moins de 10 km</h2>
             <div class="chart chart-fill" id="chart-c-composition"></div>
+            <p class="calc"><b>Calcul&nbsp;:</b> nombre de lieux culturels recensés par le ministère de la Culture à moins de 10&nbsp;km à vol d'oiseau de la gare, regroupés en 4 familles.</p>
         </section>
         <section class="panel cpanel" aria-labelledby="c-trip-title">
             <h2 class="cpanel-title" id="c-trip-title">Le voyage</h2>
@@ -176,10 +182,12 @@
         <section class="panel cpanel" aria-labelledby="c-co2-title">
             <h2 class="cpanel-title" id="c-co2-title">CO₂ d'un aller simple</h2>
             <div class="chart chart-fill" id="chart-c-co2"></div>
+            <p class="calc"><b>Calcul&nbsp;:</b> distance à vol d'oiseau × 1,2 (détours des voies et des routes) × émissions du mode par voyageur et par km (ADEME, fabrication incluse).</p>
         </section>
         <section class="panel cpanel" aria-labelledby="c-trend-title">
             <h2 class="cpanel-title" id="c-trend-title">Voyageurs par jour en gare, 2015-2024</h2>
             <div class="chart chart-fill" id="chart-c-trend"></div>
+            <p class="calc"><b>Calcul&nbsp;:</b> voyageurs de l'année en gare (SNCF) ÷ 365. Chaque vignette a sa propre échelle&nbsp;: comparez les formes, lisez les chiffres.</p>
         </section>
     </div>
 </div>
