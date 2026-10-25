@@ -51,15 +51,15 @@
         <datalist id="origin-list"></datalist>
     </div>
     <div class="field field-distance">
-        <label for="max_km">Jusqu'à</label>
-        <select id="max_km" disabled aria-describedby="max-km-help">
+        <label for="max_duration">Jusqu'à</label>
+        <select id="max_duration" disabled aria-describedby="max-duration-help">
             <option value="0">Toute la France</option>
-            <option value="100">100 km</option>
-            <option value="200">200 km</option>
-            <option value="300" selected>300 km</option>
-            <option value="500">500 km</option>
+            <option value="1">1 h de train</option>
+            <option value="2" selected>2 h de train</option>
+            <option value="3">3 h de train</option>
+            <option value="4">4 h de train</option>
         </select>
-        <span id="max-km-help" class="sr-only">Distance à vol d'oiseau depuis la gare de départ. Choisissez d'abord une gare de départ.</span>
+        <span id="max-duration-help" class="sr-only">Durée estimée de trajet en train depuis la gare de départ. Choisissez d'abord une gare de départ.</span>
     </div>
     <fieldset class="field field-wishes">
         <legend>Mes envies</legend>

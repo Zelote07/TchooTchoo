@@ -30,16 +30,17 @@ journey_cache: dict = {}
 rail_cache: dict = {}
 
 LIST_COLUMNS = ["id_gare", "nom_gare", "commune", "region", "score", "lieux", "remarquables", "voyageurs",
-                "acces_fauteuil", "acces_pmr_partiel", "distance_km", "calme", "culture", "latitude", "longitude"]
+                "acces_fauteuil", "acces_pmr_partiel", "distance_km", "duree_min", "calme", "culture", "latitude", "longitude"]
 EXPORT_COLUMNS = ["nom_gare", "commune", "region", "gcd_label", "score", "rang_national", "lieux", "remarquables",
                   "voyageurs", "acces_fauteuil", "distance_km"] + COMPONENTS + ["latitude", "longitude"]
 DETAIL_COLUMNS = ["id_gare", "nom_gare", "commune", "region", "gcd", "gcd_label", "latitude", "longitude", "voyageurs",
                   "acces_fauteuil", "acces_pmr_partiel", "nb_ascenseurs", "score", "rang_national", "lieux",
-                  "remarquables", "distance_km"] + COMPONENTS
+                  "remarquables", "distance_km", "duree_min"] + COMPONENTS
 
 # Préréglages de la démonstration (route /oral) : modifier ici pour changer de scénario.
 DEMO = {
     "origin": "Marseille Saint-Charles",
+    "max_duration": 2,
     "max_km": 200,
     "preset": "equilibre",
     "compare": ["Théoule-sur-Mer", "Èze"],

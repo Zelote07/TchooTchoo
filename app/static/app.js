@@ -131,7 +131,10 @@ function applyDemoOrSharedLink() {
         document.getElementById('origin').value = state.stationByName.get(originName.toLowerCase()).nom_gare;
     }
     if (!demo) return;
-    document.getElementById('max_km').value = String(demo.max_km);
+    const durEl = document.getElementById('max_duration') || document.getElementById('max_km');
+    if (durEl) {
+        durEl.value = String(demo.max_duration ?? (demo.max_km ? Math.round(demo.max_km / 100) : 2));
+    }
     const preset = document.querySelector(`input[name="preset"][value="${demo.preset}"]`);
     if (preset) preset.checked = true;
     [state.compare.a, state.compare.b] = demo.compare;
@@ -221,7 +224,8 @@ function bindControls() {
 }
 
 function syncDistanceField() {
-    document.getElementById('max_km').disabled = !originId();
+    const el = document.getElementById('max_duration') || document.getElementById('max_km');
+    if (el) el.disabled = !originId();
 }
 
 /* ========================================================
@@ -278,8 +282,8 @@ function searchParams() {
     const origin = originId();
     if (origin) {
         p.set('origin', origin);
-        const maxKm = document.getElementById('max_km').value;
-        if (+maxKm) p.set('max_km', maxKm);
+        const maxDuration = (document.getElementById('max_duration') || document.getElementById('max_km'))?.value;
+        if (+maxDuration) p.set('max_duration', maxDuration);
     }
     const smallTowns = document.getElementById('small_towns').checked;
     p.set('gcd', (smallTowns ? WITH_SMALL_TOWNS_GCD : RURAL_GCD).join(','));
@@ -390,7 +394,11 @@ function ideaHtml(s, index) {
         s.pepite ? '<span class="tag tag-pepite">Pépite</span>' : '',
         s.acces_fauteuil ? '<span class="tag tag-access" title="Gare accessible en fauteuil roulant">Accessible</span>' : '',
     ].join('');
-    const where = s.distance_km != null ? `à ${nf.format(Math.round(s.distance_km))} km` : escapeHtml(s.region || '');
+    const timeStr = s.duree_min != null ? `~${duration(s.duree_min)}` : '';
+    const distStr = s.distance_km != null ? `${nf.format(Math.round(s.distance_km))} km` : '';
+    const where = timeStr
+        ? `${timeStr} (${distStr})`
+        : (distStr ? `à ${distStr}` : escapeHtml(s.region || ''));
     return `<li><button type="button" class="idea" data-id="${escapeHtml(s.id_gare)}" aria-current="${s.id_gare === state.selected}"
         aria-label="${escapeHtml(s.nom_gare)}, note ${note10(s.score)} sur 10${s.pepite ? ', pépite' : ''}">
         <span class="idea-rank" aria-hidden="true">${index + 1}</span>
@@ -611,8 +619,9 @@ function renderTrip(s) {
         document.getElementById('focus-origin').addEventListener('click', () => document.getElementById('origin').focus());
         return;
     }
+    const durEst = s.duree_min != null ? ` · trajet estimé à <strong>~${duration(s.duree_min)}</strong>` : '';
     trip.innerHTML = `<div class="trip">
-        <p class="trip-main"><strong>${nf.format(Math.round(s.distance_km))} km</strong> à vol d'oiseau depuis ${escapeHtml(state.stationById.get(origin).nom_gare)}</p>
+        <p class="trip-main"><strong>${nf.format(Math.round(s.distance_km))} km</strong>${durEst} à vol d'oiseau depuis ${escapeHtml(state.stationById.get(origin).nom_gare)}</p>
         <p class="trip-live" id="trip-live">${state.meta.live_journeys ? 'Recherche du prochain train…' : 'Horaires indisponibles (clé API SNCF non configurée).'}</p></div>`;
     if (co2) {
         const ter = co2.find((r) => r.mode.includes('TER')).kg;
@@ -684,8 +693,11 @@ function fetchJourney(from, to) {
 }
 
 function duration(min) {
+    if (!min) return '0 min';
     const h = Math.floor(min / 60);
-    return h ? `${h} h ${String(min % 60).padStart(2, '0')}` : `${min} min`;
+    const m = min % 60;
+    if (!h) return `${m} min`;
+    return m ? `${h} h ${String(m).padStart(2, '0')}` : `${h} h`;
 }
 
 function transfers(n) {
@@ -920,6 +932,7 @@ function renderTripTable(d) {
             <th scope="col"><span class="key key-b">B</span> ${escapeHtml(B.nom_gare)}</th></tr></thead>
         <tbody>
             <tr><th scope="row">Distance</th><td class="${dA}">${km(A.distance_km)}</td><td class="${dB}">${km(B.distance_km)}</td></tr>
+            <tr><th scope="row">Durée estimée</th><td class="${dA}">${A.duree_min ? `~${duration(A.duree_min)}` : '—'}</td><td class="${dB}">${B.duree_min ? `~${duration(B.duree_min)}` : '—'}</td></tr>
             <tr><th scope="row">Prochain train</th><td id="trip-a">${origin ? '…' : '—'}</td><td id="trip-b">${origin ? '…' : '—'}</td></tr>
             <tr><th scope="row">Accès fauteuil</th><td class="${fA}">${yesNo(A.acces_fauteuil)}</td><td class="${fB}">${yesNo(B.acces_fauteuil)}</td></tr>
             <tr><th scope="row">Pépite</th><td class="${pA}">${yesNo(d.a.pepite)}</td><td class="${pB}">${yesNo(d.b.pepite)}</td></tr>

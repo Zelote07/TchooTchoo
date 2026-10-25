@@ -24,6 +24,7 @@ COMPONENTS = ["culture", "calme", "ruralite", "accessibilite"]
 DEFAULT_WEIGHTS = {"culture": 40, "calme": 30, "ruralite": 20, "accessibilite": 10}
 REMARKABLE_WEIGHT = 4
 DETOUR_FACTOR = 1.2  # distance réelle ≈ 1,2 x distance à vol d'oiseau (route comme rail)
+AVG_TRAIN_SPEED_KMH = 80  # vitesse commerciale moyenne estimée (TER avec arrêts)
 PEPITE_THRESHOLD = 50  # "pépite" : au moins aussi calme ET aussi riche en culture que la moitié des gares
 
 
@@ -40,7 +41,8 @@ def haversine_km(lat1, lon1, lat2, lon2):
 @dataclass
 class Filters:
     origin: str | None = None
-    max_km: int = 0                      # 0 = pas de limite
+    max_duration: int = 0                # 0 = pas de limite, durée max en heures (ex: 1, 2, 3, 4)
+    max_km: int = 0                      # rétro-compatibilité si fourni
     regions: list[str] = field(default_factory=list)
     gcd: list[int] = field(default_factory=lambda: [5, 6, 7])
     pmr_only: bool = False
@@ -66,6 +68,7 @@ class Filters:
         radius = int(args.get("radius", 10))
         return cls(
             origin=args.get("origin") or None,
+            max_duration=max(0, int(args.get("max_duration", 0) or 0)),
             max_km=max(0, int(args.get("max_km", 0) or 0)),
             regions=regions,
             gcd=ints("gcd", [5, 6, 7]),
@@ -110,8 +113,11 @@ class StationStore:
         if f.origin and f.origin in self.by_id.index:
             o = self.by_id.loc[f.origin]
             df["distance_km"] = haversine_km(o["latitude"], o["longitude"], df["latitude"], df["longitude"]).round(1)
+            # Durée estimée en minutes : distance réelle (détour x1.2) / vitesse moyenne (80 km/h) * 60
+            df["duree_min"] = (df["distance_km"] * DETOUR_FACTOR / AVG_TRAIN_SPEED_KMH * 60).round().astype(int)
         else:
             df["distance_km"] = np.nan
+            df["duree_min"] = np.nan
         return df
 
     def apply_filters(self, df: pd.DataFrame, f: Filters) -> pd.DataFrame:
@@ -122,7 +128,9 @@ class StationStore:
             mask &= df["acces_fauteuil"] | df["acces_pmr_partiel"]
         if f.min_lieux:
             mask &= df["lieux"] >= f.min_lieux
-        if f.max_km and df["distance_km"].notna().any():
+        if f.max_duration and df["duree_min"].notna().any():
+            mask &= df["duree_min"] <= f.max_duration * 60
+        elif f.max_km and df["distance_km"].notna().any():
             mask &= df["distance_km"] <= f.max_km
         if f.origin:
             mask &= df["id_gare"] != f.origin

@@ -73,7 +73,7 @@ Dans toute la vue, la destination **A est en bleu ardoise** (ronds) et la **B en
 | Contrôle | Effet | Valeur par défaut |
 |---|---|---|
 | **Je pars de** | Gare de départ (liste des 2 798 gares). Active la distance, le prochain train et le bilan carbone. | vide (toute la France) |
-| **Jusqu'à** | Distance maximale **à vol d'oiseau** depuis la gare de départ. Le champ est grisé tant qu'aucune gare de départ n'est choisie. | 300 km |
+| **Jusqu'à** | Durée maximale estimée de trajet en train depuis la gare de départ (1 h, 2 h, 3 h, 4 h ou toute la France). Le champ est grisé tant qu'aucune gare de départ n'est choisie. | 2 h de train |
 | **Mes envies** | Change l'importance des quatre critères de la note (voir [§ 7.6](#76-la-note-sur-10)). | Un peu de tout |
 | **Gare accessible PMR** | Ne garde que les gares accessibles en fauteuil roulant ou avec un accès partiel pour les personnes à mobilité réduite. | non |
 | **Inclure les petites villes** | Ajoute les petites villes et les périphéries de villes aux communes rurales. | non |
