@@ -17,7 +17,7 @@ L'exemple qui sert de fil rouge est la gare de **Boisleux-au-Mont** (Pas-de-Cala
    - [Onglet « À visiter »](#51-onglet-à-visiter)
    - [Onglet « Pourquoi ici ? »](#52-onglet-pourquoi-ici-)
    - [Onglet « Situer »](#53-onglet-situer)
-   - [Onglet « Y aller »](#54-onglet-y-aller)
+   - [Onglet « Information trajet »](#54-onglet-information-trajet)
 6. [La vue « Comparer »](#6-la-vue-comparer)
 7. [Les calculs en détail](#7-les-calculs-en-détail)
 8. [Données sources et préparation](#8-données-sources-et-préparation)
@@ -44,7 +44,7 @@ La page tient sur **un seul écran, sans défilement**. Deux vues partagent la m
 ├──────────────────┬──────────────────────────────┬─────────────────────────┤
 │ 1. Nos idées     │ 2. Carte                     │ 3. Fiche destination    │
 │ (liste classée)  │ (où sont les idées)          │ À visiter · Pourquoi ici│
-│                  │                              │ Situer · Y aller        │
+│                  │                              │ Situer · Information trajet │
 └──────────────────┴──────────────────────────────┴─────────────────────────┘
 ```
 
@@ -223,11 +223,11 @@ La distance est celle à vol d'oiseau depuis la gare. Seuls les lieux qui tienne
 
 **Pourquoi ce graphique ?** Il rend visible la notion de pépite, que la note seule résume en un chiffre. Les axes sont linéaires et exprimés en positions sur 100, plus compréhensibles pour le grand public que des nombres bruts de voyageurs, qui demanderaient une échelle logarithmique.
 
-### 5.4 Onglet Y aller
+### 5.4 Onglet Information trajet
 
 Sans gare de départ, l'onglet invite à en choisir une. Avec une gare de départ, il affiche :
 
-**1. La distance** : distance à vol d'oiseau entre les deux gares ([§ 7.1](#71-distance-entre-deux-points)). *Exemple : Lyon Part Dieu → Boisleux-au-Mont = 519 km.*
+**1. La distance et la durée estimée** : distance à vol d'oiseau entre les deux gares ([§ 7.1](#71-distance-entre-deux-points-et-durée-estimée)) et durée de trajet estimée en train (~80 km/h avec détours ferroviaires). *Exemple : Lyon Part Dieu → Boisleux-au-Mont = 519 km (~7 h 47 estimé).*
 
 **2. Le prochain train** (si la clé API SNCF est configurée) : durée, nombre de correspondances, date et heures de départ et d'arrivée du trajet le plus rapide parmi les prochains départs. Ces données viennent en temps réel de l'API SNCF (Navitia). Si aucun trajet n'existe dans les heures qui viennent, ce qui arrive souvent pour les petites haltes ou la nuit, la recherche est relancée pour le lendemain à 7 h.
 
@@ -298,7 +298,8 @@ Les noms sont écrits dans la couleur de leur destination (A bleu, B terre cuite
 
 | Ligne | Contenu | Meilleure valeur (✓) |
 |---|---|---|
-| Distance | Distance à vol d'oiseau depuis le départ ([§ 7.1](#71-distance-entre-deux-points)) | la plus courte |
+| Distance | Distance à vol d'oiseau depuis le départ ([§ 7.1](#71-distance-entre-deux-points-et-durée-estimée)) | la plus courte |
+| Durée estimée | Temps de trajet ferroviaire estimé (~80 km/h TER, détour × 1,2) | la plus courte |
 | Prochain train | Durée du trajet le plus rapide et nombre de correspondances (API SNCF, temps réel). La date et l'heure de départ apparaissent au survol. | le plus rapide |
 | Accès fauteuil | Oui / Non | « Oui » si une seule gare est accessible |
 | Pépite | Oui / Non ([§ 7.7](#77-pépite)) | « Oui » si une seule gare est une pépite |
@@ -314,7 +315,7 @@ La coche ✓ n'apparaît que si les deux valeurs diffèrent. « aucun train proc
 | **Forme** | Trois modes (train régional, voiture, avion), avec pour chacun une barre A et une barre B, valeur en kg écrite au bout |
 | **Calcul** | [§ 7.8](#78-empreinte-carbone), avec la distance propre à chaque destination |
 | **Exemple depuis Marseille** | Train régional : Théoule 3,5 kg, Èze 4,6 kg · Voiture : 17,0 et 22,0 kg · Avion : 34,4 et 44,7 kg |
-| **Choix** | Trois modes seulement, pour garder un graphique lisible : le train régional (le cas le plus fréquent vers une petite gare), la voiture (l'alternative habituelle) et l'avion (le cas extrême). Le détail des six modes reste dans l'onglet « Y aller » de la fiche. |
+| **Choix** | Trois modes seulement, pour garder un graphique lisible : le train régional (le cas le plus fréquent vers une petite gare), la voiture (l'alternative habituelle) et l'avion (le cas extrême). Le détail des six modes reste dans l'onglet « Information trajet » de la fiche. |
 
 ### 6.7 Voyageurs par jour en gare, 2015-2024 — petits multiples
 
@@ -332,7 +333,7 @@ La coche ✓ n'apparaît que si les deux valeurs diffèrent. « aucun train proc
 
 ## 7. Les calculs en détail
 
-### 7.1 Distance entre deux points
+### 7.1 Distance entre deux points et durée estimée
 
 On utilise la **formule de haversine** : c'est la distance « à vol d'oiseau » sur la sphère terrestre, avec un rayon de 6 371 km.
 
@@ -341,7 +342,13 @@ a = sin²(Δlat / 2) + cos(lat₁) · cos(lat₂) · sin²(Δlon / 2)
 d = 2 · 6371 · arcsin(√a)        (latitudes et longitudes en radians)
 ```
 
-Elle sert à quatre choses : compter les lieux autour d'une gare, mesurer la distance des lieux « à ne pas manquer », appliquer le filtre « Jusqu'à » et calculer le bilan carbone.
+Elle sert à :
+1. compter les lieux autour d'une gare (rayon de 10 km),
+2. mesurer la distance des lieux « à ne pas manquer »,
+3. **estimer la durée de voyage en train** pour le filtre « Jusqu'à » (1 h, 2 h, 3 h, 4 h) et l'affichage des fiches :
+   $$\text{durée (min)} = \frac{\text{distance} \times 1{,}2}{80} \times 60$$
+   avec un facteur de détour ferroviaire de 1,2 et une vitesse commerciale TER moyenne estimée à 80 km/h (arrêts compris),
+4. calculer le bilan carbone.
 
 ### 7.2 Critère Culture
 
@@ -450,7 +457,7 @@ Source : ADEME, Base Empreinte, via l'API [impactco2.fr](https://impactco2.fr), 
 
 - **Le calme est mesuré en gare**, pas sur le territoire : un site très touristique peut avoir une petite gare peu utilisée, parce que la plupart des visiteurs viennent en voiture.
 - **Les monuments historiques dominent la base** (environ 56 % des lieux) : un village riche en petit patrimoine peut dépasser une ville dotée d'un grand musée. Le bonus des lieux labellisés corrige en partie ce biais.
-- **La fréquence des trains n'est pas prise en compte** dans la note : certaines haltes n'ont que quelques trains par jour. L'onglet « Y aller » le montre au cas par cas.
+- **La fréquence des trains n'est pas prise en compte** dans la note : certaines haltes n'ont que quelques trains par jour. L'onglet « Information trajet » le montre au cas par cas.
 - **Horaires d'ouverture, hébergement et restauration** ne sont pas connus.
 - **Le bilan carbone est un ordre de grandeur** : distance approchée et facteurs moyens.
 - **Le classement fin dépend des poids** ([§ 7.6](#76-la-note-sur-10)).
@@ -481,14 +488,14 @@ L'adresse **`/oral`** ouvre la même page avec un scénario préréglé pour la 
 | Réglage | Valeur |
 |---|---|
 | Départ | Marseille Saint-Charles |
-| Jusqu'à | 200 km |
+| Jusqu'à | 2 h de train |
 | Envie | Un peu de tout |
 | Comparaison | A = Théoule-sur-Mer, B = Èze |
 | Fiche ouverte | Théoule-sur-Mer |
 
 Un repère « Démo · départ Marseille Saint-Charles · quitter » s'affiche dans l'en-tête. Tous les contrôles restent utilisables pendant la démonstration.
 
-**Liens directs** : `/oral#comparaison` ouvre la vue Comparer ; `/oral#y-aller`, `#pourquoi` et `#situer` ouvrent un onglet de la fiche.
+**Liens directs** : `/oral#comparaison` ouvre la vue Comparer ; `/oral#trajet`, `#pourquoi` et `#situer` ouvrent un onglet de la fiche.
 
 **Changer de scénario** : modifier le dictionnaire `DEMO` en haut de `app/backend.py` (noms de gares exacts tels qu'ils apparaissent dans la liste).
 

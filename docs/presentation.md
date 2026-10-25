@@ -50,19 +50,19 @@ Quatre sources ouvertes, croisées à la maille de la gare :
 - **Recommandation** : promouvoir les pépites desservies, et cibler la mise en accessibilité sur cette liste.
 
 ## 7. Démo (5 min) — script
-Ouvrir **`http://127.0.0.1:5000/oral`** : départ Marseille Saint-Charles, 200 km, comparaison Théoule-sur-Mer (A) / Èze (B) déjà préparés.
+Ouvrir **`http://127.0.0.1:5000/oral`** : départ Marseille Saint-Charles, 2 h de train, comparaison Théoule-sur-Mer (A) / Èze (B) déjà préparés.
 Plan B si le réseau tombe : sans connexion à l'API SNCF, seule la ligne « Prochain train » est vide ; tout le reste fonctionne.
 
 **Explorer (2 min)**
-1. **Arrivée** : tout tient sur un écran. Résumé : « 54 gares de campagne, dont 7 pépites » à moins de 200 km de Marseille.
+1. **Arrivée** : tout tient sur un écran. Résumé : gares de campagne à moins de 2 h de train de Marseille (20 gares, dont 7 pépites).
 2. **Liste** : la première idée, Saint-Laurent-d'Aigouze (Camargue), est notée 6,3… mais aucun train n'y va dans les 24 heures. C'est l'occasion de dire honnêtement que la note ne tient pas compte de la desserte.
-3. **Fiche Théoule-sur-Mer** (déjà ouverte, repère **A** dans la liste) : onglet **À visiter** (graphique des familles de lieux, lieux labellisés), puis **Pourquoi ici ?** (critères en phrases simples), puis **Y aller** : 128 km, prochain train réel en 2 h 41 avec une correspondance, « 5 fois moins de CO₂ qu'en voiture ».
+3. **Fiche Théoule-sur-Mer** (déjà ouverte, repère **A** dans la liste) : onglet **À visiter** (graphique des familles de lieux, lieux labellisés), puis **Pourquoi ici ?** (critères en phrases simples), puis **Information trajet** : 128 km (~1 h 36 estimé), prochain train réel en 2 h 41 avec une correspondance, « 5 fois moins de CO₂ qu'en voiture ».
 
 **Comparer (3 min)**
 4. Cliquer **Comparer (2)** en haut. Lire le **verdict** : « Théoule-sur-Mer est plus calme (6,6 contre 2,7) ; Èze a plus de lieux à visiter (250 contre 75). Selon vos envies, les deux se valent. »
 5. **Haltères** : la longueur du trait gris montre l'écart ; Calme et Culture s'opposent, Campagne et Accès sont à égalité (« A = B »).
 6. **Lieux** (barres groupées) : Èze compte 164 monuments, contre 32 pour Théoule.
-7. **Le voyage** : Théoule est plus proche (128 contre 166 km) et plus rapide (2 h 41 contre 3 h 11), et c'est une pépite. Les coches ✓ désignent la meilleure valeur.
+7. **Le voyage** : Théoule est plus proche (128 contre 166 km), plus rapide en durée estimée (~1 h 36 contre ~2 h 04) et en train réel (2 h 41 contre 3 h 11), et c'est une pépite. Les coches ✓ désignent la meilleure valeur.
 8. **CO₂** : 3,5 kg en train régional contre 17 kg en voiture pour Théoule.
 9. **Voyageurs par jour** : 88 à Théoule contre 826 à Èze en 2024. Expliquer les échelles séparées (petits multiples, pas de double axe).
 10. **Moment clé** : passer **Mes envies** sur « Culture d'abord » : Èze l'emporte (6,7 contre 5,8). Passer sur « Calme absolu » : Théoule l'emporte (6,4 contre 4,7). **Le bon choix dépend du voyageur**, et l'outil le montre au lieu d'imposer un palmarès.
