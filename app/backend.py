@@ -14,6 +14,7 @@ from dotenv import load_dotenv
 from flask import Flask, Response, jsonify, render_template, request
 
 import charts
+from rail_router import get_router
 from scoring import (COMPONENTS, DEFAULT_WEIGHTS, PEPITE_THRESHOLD, Filters, StationStore, clean_record,
                      co2_comparison)
 
@@ -24,7 +25,9 @@ SNCF_JOURNEYS_URL = "https://api.sncf.com/v1/coverage/sncf/journeys"
 app = Flask(__name__, static_folder="static", template_folder="templates")
 app.json.sort_keys = False
 store = StationStore()
+router = get_router()   # Chargement unique du réseau ferroviaire au démarrage
 journey_cache: dict = {}
+rail_cache: dict = {}
 
 LIST_COLUMNS = ["id_gare", "nom_gare", "commune", "region", "score", "lieux", "remarquables", "voyageurs",
                 "acces_fauteuil", "acces_pmr_partiel", "distance_km", "calme", "culture", "latitude", "longitude"]
@@ -214,6 +217,24 @@ def journey():
         "legs": legs,
     }
     journey_cache[(o, d)] = result
+    return jsonify(result)
+
+
+
+@app.route("/api/rail-path")
+def rail_path():
+    """Tracé ferroviaire réel entre deux gares (GeoJSON réseau SNCF exploité)."""
+    o, d = request.args.get("from"), request.args.get("to")
+    if o not in store.by_id.index or d not in store.by_id.index:
+        return jsonify({"error": "Gare inconnue"}), 404
+    cache_key = (o, d)
+    if cache_key in rail_cache:
+        return jsonify(rail_cache[cache_key])
+    a, b = store.by_id.loc[o], store.by_id.loc[d]
+    coords = router.find_rail_path(a.latitude, a.longitude, b.latitude, b.longitude)
+    result = {"coordinates": coords or []}
+    if coords:
+        rail_cache[cache_key] = result
     return jsonify(result)
 
 

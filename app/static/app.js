@@ -146,6 +146,7 @@ function initMap() {
     state.map.attributionControl.setPrefix(false);
     applyTiles();
     state.layers.context = L.layerGroup().addTo(state.map);
+    state.layers.rail = L.layerGroup().addTo(state.map);
     state.layers.points = L.layerGroup().addTo(state.map);
     state.layers.origin = L.layerGroup().addTo(state.map);
     state.legend = L.control({ position: 'bottomleft' });
@@ -483,6 +484,7 @@ function renderMapPoints(fit) {
 
 function renderOrigin() {
     state.layers.origin.clearLayers();
+    state.layers.rail.clearLayers();
     const id = originId();
     if (id) originMarker(id).addTo(state.layers.origin);
 }
@@ -518,6 +520,9 @@ function selectStation(id) {
     const m = state.markers.get(id);
     if (m && !state.map.getBounds().pad(-0.1).contains(m.getLatLng())) state.map.panTo(m.getLatLng());
     loadStation(id);
+    const origin = originId();
+    if (origin && origin !== id) drawRailPath(origin, id, state.layers.rail, state.map, cssVar('--a'));
+    else state.layers.rail.clearLayers();
 }
 
 let stationController;
@@ -625,6 +630,46 @@ function renderTrip(s) {
 }
 
 const journeyCache = new Map();
+const railPathCache = new Map();
+
+function fetchRailPath(from, to) {
+    const key = `${from}|${to}`;
+    if (!railPathCache.has(key)) {
+        railPathCache.set(key, fetch(`/api/rail-path?from=${encodeURIComponent(from)}&to=${encodeURIComponent(to)}`)
+            .then(async (res) => {
+                const j = await res.json();
+                return res.ok ? j.coordinates : null;
+            })
+            .catch(() => null));
+    }
+    return railPathCache.get(key);
+}
+
+function drawRailPath(fromId, toId, layerGroup, mapObj, color, fallbackLatlngs = null, clearFirst = true) {
+    if (clearFirst) layerGroup.clearLayers();
+    const fromStation = state.stationById.get(fromId);
+    const toStation = state.stationById.get(toId);
+    if (!fromStation || !toStation) return;
+    const fallback = () => {
+        if (fallbackLatlngs) {
+            L.polyline(fallbackLatlngs, { color, weight: 2.5, dashArray: '6 7', opacity: 0.85, interactive: false }).addTo(layerGroup);
+        } else {
+            L.polyline(
+                [[fromStation.latitude, fromStation.longitude], [toStation.latitude, toStation.longitude]],
+                { color, weight: 2.5, dashArray: '6 7', opacity: 0.85, interactive: false },
+            ).addTo(layerGroup);
+        }
+    };
+    fetchRailPath(fromId, toId).then((coords) => {
+        if (coords && coords.length > 0) {
+            const latlngs = coords.map(([lon, lat]) => [lat, lon]);
+            L.polyline(latlngs, { color, weight: 3, opacity: 0.85, interactive: false }).addTo(layerGroup);
+        } else {
+            fallback();
+        }
+    });
+}
+
 function fetchJourney(from, to) {
     const key = `${from}|${to}`;
     if (!journeyCache.has(key)) {
@@ -761,7 +806,8 @@ function initCompareMap() {
     state.cmap = L.map('map-compare', { zoomControl: false, attributionControl: true, preferCanvas: true });
     state.cmap.attributionControl.setPrefix(false);
     state.ctiles = tileLayer().addTo(state.cmap);
-    state.clayer = L.layerGroup().addTo(state.cmap);
+    state.crail = L.layerGroup().addTo(state.cmap);   // layer tracé ferroviaire (Compare)
+    state.clayer = L.layerGroup().addTo(state.cmap);  // layer marqueurs (Compare)
     state.cmap.setView([46.6, 2.4], 5);
 }
 
@@ -824,6 +870,7 @@ function renderVerdict(d) {
 
 function renderCompareMap(d) {
     state.clayer.clearLayers();
+    state.crail?.clearLayers();
     const pts = [];
     const origin = originId();
     if (origin) {
@@ -834,19 +881,20 @@ function renderCompareMap(d) {
     [['a', d.a.station], ['b', d.b.station]].forEach(([slot, s]) => {
         const color = cssVar(`--${slot}`);
         const ll = [s.latitude, s.longitude];
-        if (origin) {
+        pts.push(ll);
+        // Tracé ferroviaire sur le layer dédié (sans effacer entre A et B)
+        if (origin && state.crail) {
             const o = state.stationById.get(origin);
-            L.polyline([[o.latitude, o.longitude], ll], { color, weight: 2, dashArray: '5 6', opacity: 0.9, interactive: false })
-                .addTo(state.clayer);
+            const fallback = [[o.latitude, o.longitude], ll];
+            drawRailPath(origin, s.id_gare, state.crail, state.cmap, color, fallback, false);
         }
+        // Marqueurs sur le layer principal
         L.circleMarker(ll, { radius: 8, weight: 2, color: cssVar('--surface'), fillColor: color, fillOpacity: 1 })
             .bindTooltip(`${slot.toUpperCase()} · ${escapeHtml(s.nom_gare)}`, {
-                // A à gauche, B à droite : les étiquettes ne se chevauchent pas quand les gares sont proches
                 permanent: true, direction: slot === 'a' ? 'left' : 'right', offset: [slot === 'a' ? -8 : 8, 0],
                 className: `key-label key-label-${slot}`,
             })
             .addTo(state.clayer);
-        pts.push(ll);
     });
     state.cmap.invalidateSize();
     state.cmap.fitBounds(pts, { padding: [40, 40], maxZoom: 9 });
